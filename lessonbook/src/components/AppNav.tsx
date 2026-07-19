@@ -5,6 +5,7 @@ import type { Role } from "@/lib/types";
 const TABS: Record<Role, { href: string; label: string }[]> = {
   teacher: [
     { href: "/t/schedule", label: "스케줄" },
+    { href: "/t/requests", label: "승인" },
     { href: "/t/students", label: "학생" },
     { href: "/t/settings", label: "설정" },
   ],

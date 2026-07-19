@@ -15,7 +15,25 @@ export type TeacherSettings = {
   bank_info: string | null;
   payment_link: string | null;
   join_code: string;
+  allow_student_cancel: boolean;
+  allow_student_swap: boolean;
+  swap_needs_approval: boolean;
+  cancel_free_hours: number;
+  book_free_hours: number;
+  swap_free_hours: number;
 };
+
+/** 학생 화면에서 "지금 이 동작이 즉시 되는지 / 승인이 필요한지" 판단에 쓰는 값들 */
+export type BookingPolicy = {
+  allow_student_cancel: boolean;
+  allow_student_swap: boolean;
+  swap_needs_approval: boolean;
+  cancel_free_hours: number;
+  book_free_hours: number;
+  swap_free_hours: number;
+};
+
+export type BookingStatus = "pending" | "confirmed" | "completed";
 
 export type ScheduleRow = {
   slot_id: string;
@@ -27,6 +45,18 @@ export type ScheduleRow = {
   student_label: string | null;
   enrollment_id: string | null;
   session_done: boolean | null;
+  booking_status: BookingStatus | null;
+  cancel_requested: boolean | null;
+};
+
+export type TeacherRequest = {
+  kind: "booking" | "cancel" | "swap";
+  ref_id: string;
+  starts_at: string;
+  other_time: string | null;
+  who: string;
+  message: string | null;
+  created_at: string;
 };
 
 export type StudentOverview = {

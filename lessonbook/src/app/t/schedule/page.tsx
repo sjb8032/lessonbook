@@ -34,7 +34,9 @@ export default async function TeacherSchedulePage({
   });
   const { data: settings } = await supabase
     .from("teacher_settings")
-    .select("lesson_minutes, join_code")
+    .select(
+      "lesson_minutes, join_code, allow_student_cancel, allow_student_swap, swap_needs_approval, cancel_free_hours, book_free_hours, swap_free_hours"
+    )
     .eq("teacher_id", user!.id)
     .single();
 
@@ -51,6 +53,14 @@ export default async function TeacherSchedulePage({
         rows={(rows as ScheduleRow[]) ?? []}
         weekOffset={offset}
         lessonMinutes={settings?.lesson_minutes ?? 60}
+        policy={{
+          allow_student_cancel: settings?.allow_student_cancel ?? true,
+          allow_student_swap: settings?.allow_student_swap ?? true,
+          swap_needs_approval: settings?.swap_needs_approval ?? false,
+          cancel_free_hours: settings?.cancel_free_hours ?? 12,
+          book_free_hours: settings?.book_free_hours ?? 12,
+          swap_free_hours: settings?.swap_free_hours ?? 12,
+        }}
       />
       <p className="mt-3 text-xs text-ink-soft">
         빈 시간을 탭해 열어두면, 수강생이 직접 보고 예약해요. 물어볼 필요가

@@ -3,19 +3,23 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function openSlot(startsAtISO: string, minutes: number) {
+export async function openSlots(startsAtISOs: string[], minutes: number) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요해요" };
+  if (startsAtISOs.length === 0) return { error: "선택된 시간이 없어요" };
 
-  const ends = new Date(new Date(startsAtISO).getTime() + minutes * 60 * 1000);
-  const { error } = await supabase.from("slots").insert({
-    teacher_id: user.id,
-    starts_at: startsAtISO,
-    ends_at: ends.toISOString(),
-  });
+  const { error } = await supabase.from("slots").insert(
+    startsAtISOs.map((iso) => ({
+      teacher_id: user.id,
+      starts_at: iso,
+      ends_at: new Date(
+        new Date(iso).getTime() + minutes * 60 * 1000
+      ).toISOString(),
+    }))
+  );
   revalidatePath("/t/schedule");
   return { error: error?.message ?? null };
 }

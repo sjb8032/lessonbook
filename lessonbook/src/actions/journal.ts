@@ -40,12 +40,25 @@ export async function saveSettings(form: {
   cycle_price: number;
   bank_info: string;
   payment_link: string;
+  allow_student_cancel: boolean;
+  allow_student_swap: boolean;
+  swap_needs_approval: boolean;
+  cancel_free_hours: number;
+  book_free_hours: number;
+  swap_free_hours: number;
 }) {
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요해요" };
+  if (
+    form.cancel_free_hours < 0 ||
+    form.book_free_hours < 0 ||
+    form.swap_free_hours < 0
+  ) {
+    return { error: "기준 시간은 0 이상이어야 해요" };
+  }
   const { error } = await supabase
     .from("teacher_settings")
     .update({
@@ -53,8 +66,16 @@ export async function saveSettings(form: {
       cycle_price: form.cycle_price,
       bank_info: form.bank_info || null,
       payment_link: form.payment_link || null,
+      allow_student_cancel: form.allow_student_cancel,
+      allow_student_swap: form.allow_student_swap,
+      swap_needs_approval: form.swap_needs_approval,
+      cancel_free_hours: form.cancel_free_hours,
+      book_free_hours: form.book_free_hours,
+      swap_free_hours: form.swap_free_hours,
     })
     .eq("teacher_id", user.id);
   revalidatePath("/t/settings");
+  revalidatePath("/t/schedule");
+  revalidatePath("/s/schedule");
   return { error: error?.message ?? null };
 }

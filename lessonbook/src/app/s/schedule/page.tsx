@@ -56,6 +56,15 @@ export default async function StudentSchedulePage({
     p_to: end.toISOString(),
   });
 
+  // 학생도 선생님의 예약 정책은 읽을 수 있다 (RLS: settings student read)
+  const { data: settings } = await supabase
+    .from("teacher_settings")
+    .select(
+      "lesson_minutes, allow_student_cancel, allow_student_swap, swap_needs_approval, cancel_free_hours, book_free_hours, swap_free_hours"
+    )
+    .eq("teacher_id", enrollment.teacher_id)
+    .maybeSingle();
+
   const teacher = enrollment.teacher as unknown as { name: string } | null;
 
   return (
@@ -68,7 +77,15 @@ export default async function StudentSchedulePage({
         role="student"
         rows={(rows as ScheduleRow[]) ?? []}
         weekOffset={offset}
-        lessonMinutes={60}
+        lessonMinutes={settings?.lesson_minutes ?? 60}
+        policy={{
+          allow_student_cancel: settings?.allow_student_cancel ?? true,
+          allow_student_swap: settings?.allow_student_swap ?? true,
+          swap_needs_approval: settings?.swap_needs_approval ?? false,
+          cancel_free_hours: settings?.cancel_free_hours ?? 12,
+          book_free_hours: settings?.book_free_hours ?? 12,
+          swap_free_hours: settings?.swap_free_hours ?? 12,
+        }}
       />
     </div>
   );

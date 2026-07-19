@@ -5,7 +5,7 @@ import { fmtDateTime } from "@/lib/utils";
 type SwapRow = {
   id: string;
   direction: "incoming" | "outgoing";
-  status: "pending" | "accepted" | "declined" | "canceled";
+  status: "pending" | "awaiting_teacher" | "accepted" | "declined" | "canceled";
   message: string | null;
   created_at: string;
   my_time: string;
@@ -14,7 +14,8 @@ type SwapRow = {
 };
 
 const STATUS_LABEL: Record<SwapRow["status"], string> = {
-  pending: "대기 중",
+  pending: "상대 응답 대기",
+  awaiting_teacher: "선생님 승인 대기",
   accepted: "성사됨",
   declined: "거절됨",
   canceled: "취소됨",
@@ -57,8 +58,8 @@ export default async function SwapsPage() {
                   <p className="mt-2 text-sm text-ink-soft">"{s.message}"</p>
                 )}
                 <p className="mt-2 text-xs text-ink-soft">
-                  수락하면 두 수업의 시간이 서로 바뀌고, 선생님께 자동으로
-                  알려드려요
+                  수락하면 선생님 설정에 따라 바로 바뀌거나, 선생님 승인을 거쳐
+                  확정돼요
                 </p>
                 <SwapRespond swapId={s.id} />
               </div>
@@ -87,7 +88,7 @@ export default async function SwapsPage() {
                     className={`rounded-full px-2 py-0.5 text-xs font-semibold ${
                       s.status === "accepted"
                         ? "bg-ok-soft text-ok"
-                        : s.status === "pending"
+                        : s.status === "pending" || s.status === "awaiting_teacher"
                         ? "bg-pen-soft text-pen"
                         : "bg-line/60 text-ink-soft"
                     }`}
