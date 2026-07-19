@@ -1,0 +1,40 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink: #1a1d27;
+  --color-ink-soft: #5a6072;
+  --color-paper: #f7f8fa;
+  --color-card: #ffffff;
+  --color-line: #e4e7ec;
+  --color-pen: #2b50e0;      /* 파란펜: 주요 액션 */
+  --color-pen-soft: #eef1fd;
+  --color-redpen: #e0432b;   /* 빨간펜: 결제 필요/미납 */
+  --color-redpen-soft: #fdeeeb;
+  --color-ok: #1c8a5a;
+  --color-ok-soft: #e9f6f0;
+  --font-sans: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont,
+    system-ui, "Segoe UI", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+
+html {
+  background: var(--color-paper);
+  color: var(--color-ink);
+}
+
+body {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 시그니처: 연습장 괘선 위에 슬롯이 올라앉는 구조 */
+.ruled > * {
+  border-top: 1px solid var(--color-line);
+}
+.ruled > *:last-child {
+  border-bottom: 1px solid var(--color-line);
+}
+
+.num {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum";
+}
