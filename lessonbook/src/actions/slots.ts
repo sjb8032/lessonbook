@@ -3,7 +3,14 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-export async function openSlots(startsAtISOs: string[], minutes: number) {
+type SlotKind = "lesson" | "recording" | "trial";
+
+export async function openSlots(
+  startsAtISOs: string[],
+  minutes: number,
+  kind: SlotKind = "lesson",
+  classId: string | null = null
+) {
   const supabase = await createClient();
   const {
     data: { user },
@@ -18,6 +25,9 @@ export async function openSlots(startsAtISOs: string[], minutes: number) {
       ends_at: new Date(
         new Date(iso).getTime() + minutes * 60 * 1000
       ).toISOString(),
+      kind,
+      // 반 제한은 수업 슬롯에서만 의미가 있다
+      class_id: kind === "lesson" ? classId : null,
     }))
   );
   revalidatePath("/t/schedule");

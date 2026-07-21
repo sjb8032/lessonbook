@@ -35,6 +35,11 @@ export type BookingPolicy = {
 
 export type BookingStatus = "pending" | "confirmed" | "completed";
 
+export type SlotKind = "lesson" | "recording" | "trial";
+
+/** 시간 열기·예약 시 반을 고르는 선택지 (선생님: 전체 반 / 학생: 내 반) */
+export type ClassOption = { id: string; name: string };
+
 export type ScheduleRow = {
   slot_id: string;
   starts_at: string;
@@ -47,6 +52,9 @@ export type ScheduleRow = {
   session_done: boolean | null;
   booking_status: BookingStatus | null;
   cancel_requested: boolean | null;
+  kind: SlotKind;
+  class_id: string | null;
+  class_name: string | null;
 };
 
 export type TeacherRequest = {
@@ -72,6 +80,20 @@ export type StudentOverview = {
   cycle_price: number;
   last_lesson: string | null;
   teacher_memo: string | null;
+};
+
+export type ClassRow = {
+  id: string;
+  name: string;
+  description: string | null;
+  archived: boolean;
+  member_count: number;
+};
+
+export type ClassRosterRow = {
+  enrollment_id: string;
+  student_name: string;
+  is_member: boolean;
 };
 
 export type JournalEntry = {

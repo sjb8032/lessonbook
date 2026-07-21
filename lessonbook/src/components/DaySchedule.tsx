@@ -3,7 +3,12 @@
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import type { BookingPolicy, ScheduleRow } from "@/lib/types";
+import type {
+  BookingPolicy,
+  ClassOption,
+  ScheduleRow,
+  SlotKind,
+} from "@/lib/types";
 import { addDays, fmtDay, fmtTime, sameDate, startOfWeek } from "@/lib/utils";
 import { openSlots, closeSlot, copyWeek } from "@/actions/slots";
 import {
@@ -23,6 +28,20 @@ function needsApproval(startsAt: string, freeHours: number): boolean {
 const HOURS = Array.from({ length: 24 }, (_, i) => i); // 00시–23시 시작
 const SCROLL_TO_HOUR = 8; // 목록을 열었을 때 처음 보이는 시각
 
+const KIND_LABEL: Record<SlotKind, string> = {
+  lesson: "수업",
+  recording: "녹음",
+  trial: "체험",
+};
+
+/** 슬롯 앞에 붙일 짧은 꼬리표 (녹음/체험, 또는 반 이름) */
+function slotTag(row: ScheduleRow): string | null {
+  if (row.kind === "recording") return "🎙 녹음";
+  if (row.kind === "trial") return "체험";
+  if (row.class_name) return row.class_name;
+  return null;
+}
+
 type Sheet = { kind: "slot"; row: ScheduleRow } | null;
 
 export default function DaySchedule({
@@ -31,12 +50,15 @@ export default function DaySchedule({
   weekOffset,
   lessonMinutes,
   policy,
+  classes,
 }: {
   role: "teacher" | "student";
   rows: ScheduleRow[];
   weekOffset: number;
   lessonMinutes: number;
   policy: BookingPolicy;
+  // 선생님: 자기 반 전체 / 학생: 내가 속한 반 (예약 시 반 선택용)
+  classes: ClassOption[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -44,6 +66,10 @@ export default function DaySchedule({
   const [error, setError] = useState<string | null>(null);
   const [swapSource, setSwapSource] = useState<string>("");
   const [swapMessage, setSwapMessage] = useState("");
+
+  // 시간 열 때: 종류 + (수업이면) 반 제한
+  const [openKind, setOpenKind] = useState<SlotKind>("lesson");
+  const [openClassId, setOpenClassId] = useState<string>(""); // "" = 제한 없음
 
   const weekStart = useMemo(
     () => addDays(startOfWeek(new Date()), weekOffset * 7),
@@ -296,16 +322,52 @@ export default function DaySchedule({
 
       {/* 선택한 시간 한 번에 열기 */}
       {role === "teacher" && selected.size > 0 && (
-        <div className="sticky bottom-3 z-30 mt-3 flex items-center gap-2 rounded-xl border border-line bg-card p-2 shadow-lg">
-          <span className="num shrink-0 px-2 text-sm text-ink-soft">
-            {selected.size}시간
-          </span>
-          <button
-            onClick={() => setSelected(new Set())}
-            className="shrink-0 rounded-lg px-3 py-2 text-sm text-ink-soft hover:bg-line/50"
-          >
-            해제
-          </button>
+        <div className="sticky bottom-3 z-30 mt-3 space-y-2 rounded-xl border border-line bg-card p-3 shadow-lg">
+          <div className="flex items-center justify-between">
+            <span className="num text-sm font-semibold">
+              {selected.size}시간 선택
+            </span>
+            <button
+              onClick={() => setSelected(new Set())}
+              className="rounded-lg px-2 py-1 text-sm text-ink-soft hover:bg-line/50"
+            >
+              해제
+            </button>
+          </div>
+
+          {/* 종류 */}
+          <div className="flex gap-1 rounded-xl bg-line/40 p-1">
+            {(["lesson", "recording", "trial"] as SlotKind[]).map((k) => (
+              <button
+                key={k}
+                onClick={() => setOpenKind(k)}
+                className={`flex-1 rounded-lg py-1.5 text-sm font-medium ${
+                  openKind === k
+                    ? "bg-card text-pen shadow-sm"
+                    : "text-ink-soft"
+                }`}
+              >
+                {KIND_LABEL[k]}
+              </button>
+            ))}
+          </div>
+
+          {/* 반 제한 — 수업일 때만 */}
+          {openKind === "lesson" && classes.length > 0 && (
+            <select
+              value={openClassId}
+              onChange={(e) => setOpenClassId(e.target.value)}
+              className="w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm"
+            >
+              <option value="">모든 반 (제한 없음)</option>
+              {classes.map((c) => (
+                <option key={c.id} value={c.id}>
+                  {c.name} 전용
+                </option>
+              ))}
+            </select>
+          )}
+
           <button
             disabled={pending}
             onClick={() =>
@@ -316,15 +378,17 @@ export default function DaySchedule({
                     start.setHours(h, 0, 0, 0);
                     return start.toISOString();
                   }),
-                  lessonMinutes
+                  lessonMinutes,
+                  openKind,
+                  openKind === "lesson" ? openClassId || null : null
                 );
                 if (!res.error) setSelected(new Set());
                 return res;
               })
             }
-            className="flex-1 rounded-lg bg-pen py-2 text-sm font-semibold text-white disabled:opacity-50"
+            className="w-full rounded-lg bg-pen py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            예약 가능 시간으로 열기
+            {KIND_LABEL[openKind]} 시간으로 열기
           </button>
         </div>
       )}
@@ -355,9 +419,11 @@ export default function DaySchedule({
             onClick={(e) => e.stopPropagation()}
           >
             <SlotSheet
+              key={sheet.row.slot_id}
               row={sheet.row}
               role={role}
               policy={policy}
+              classes={classes}
               pending={pending}
               error={error}
               run={run}
@@ -383,15 +449,16 @@ function SlotChip({
   role: "teacher" | "student";
   onTap: () => void;
 }) {
+  const tag = slotTag(row);
+
   if (row.slot_status === "open") {
+    const base = role === "teacher" ? "비어 있음" : "탭해서 예약";
     return (
       <button
         onClick={onTap}
         className="flex-1 rounded-lg bg-pen-soft py-1.5 text-left text-sm font-medium text-pen"
       >
-        <span className="px-2">
-          {role === "teacher" ? "예약 가능 (비어 있음)" : "예약 가능 · 탭해서 예약"}
-        </span>
+        <span className="px-2">{tag ? `${tag} · ${base}` : `예약 가능 · ${base}`}</span>
       </button>
     );
   }
@@ -402,6 +469,8 @@ function SlotChip({
   const cancelWaiting = row.cancel_requested;
   const who =
     role === "teacher" ? row.student_label : mine ? "내 수업" : row.student_label;
+  // 녹음/체험이면 종류를, 아니면 반 이름을 앞에 붙인다
+  const prefix = row.kind !== "lesson" ? `${slotTag(row)} · ` : "";
 
   return (
     <button
@@ -418,6 +487,7 @@ function SlotChip({
     >
       <span className="px-2">
         {done && "✓ "}
+        {prefix}
         {who}
         {done && " · 완료"}
         {waiting && " · 승인 대기"}
@@ -431,6 +501,7 @@ function SlotSheet({
   row,
   role,
   policy,
+  classes,
   pending,
   error,
   run,
@@ -443,6 +514,7 @@ function SlotSheet({
   row: ScheduleRow;
   role: "teacher" | "student";
   policy: BookingPolicy;
+  classes: ClassOption[];
   pending: boolean;
   error: string | null;
   run: (a: () => Promise<{ error: string | null }>) => void;
@@ -462,9 +534,24 @@ function SlotSheet({
     policy.cancel_free_hours
   );
 
+  // 학생이 제한 없는 수업을 예약할 때: 여러 반 소속이면 어느 반인지 골라야 한다
+  const needClassPick =
+    role === "student" &&
+    row.kind === "lesson" &&
+    !row.class_id &&
+    classes.length > 1;
+  const [bookClass, setBookClass] = useState("");
+
+  const tag = slotTag(row);
+
   return (
     <>
       <p className="font-semibold">{time}</p>
+      {tag && (
+        <span className="mt-1 inline-block rounded-full bg-line/50 px-2 py-0.5 text-xs text-ink-soft">
+          {row.kind === "lesson" ? `${tag} 전용` : tag}
+        </span>
+      )}
 
       {/* 선생님 */}
       {role === "teacher" && row.slot_status === "open" && (
@@ -575,15 +662,42 @@ function SlotSheet({
         <>
           <p className="mt-1 text-sm text-ink-soft">
             {bookNeedsApproval
-              ? `수업이 ${policy.book_free_hours}시간 안쪽이라 선생님 승인을 받아야 확정돼요`
-              : "예약 가능한 시간이에요"}
+              ? `${KIND_LABEL[row.kind]}이 ${policy.book_free_hours}시간 안쪽이라 선생님 승인을 받아야 확정돼요`
+              : `예약 가능한 ${KIND_LABEL[row.kind]} 시간이에요`}
           </p>
+
+          {needClassPick && (
+            <>
+              <label className="mt-4 block text-sm font-medium">
+                어느 반 수업으로 잡을까요?
+              </label>
+              <select
+                value={bookClass}
+                onChange={(e) => setBookClass(e.target.value)}
+                className="mt-1 w-full rounded-xl border border-line bg-card px-3 py-3"
+              >
+                <option value="">반 선택</option>
+                {classes.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
           <button
-            disabled={pending || !isFuture}
-            onClick={() => run(() => bookSlot(row.slot_id))}
+            disabled={pending || !isFuture || (needClassPick && !bookClass)}
+            onClick={() =>
+              run(() =>
+                bookSlot(row.slot_id, needClassPick ? bookClass : undefined)
+              )
+            }
             className="mt-4 w-full rounded-xl bg-pen py-3 font-semibold text-white disabled:opacity-50"
           >
-            {bookNeedsApproval ? "예약 신청하기" : "이 시간 예약하기"}
+            {bookNeedsApproval
+              ? `${KIND_LABEL[row.kind]} 신청하기`
+              : `이 ${KIND_LABEL[row.kind]} 예약하기`}
           </button>
         </>
       )}

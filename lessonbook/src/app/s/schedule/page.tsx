@@ -65,6 +65,14 @@ export default async function StudentSchedulePage({
     .eq("teacher_id", enrollment.teacher_id)
     .maybeSingle();
 
+  // 내가 속한 반 (제한 없는 수업 예약 시 반 선택용)
+  const { data: myClassRows } = await supabase.rpc("get_my_classes", {
+    p_teacher: enrollment.teacher_id,
+  });
+  const classes = ((myClassRows as { class_id: string; name: string }[]) ?? []).map(
+    (c) => ({ id: c.class_id, name: c.name })
+  );
+
   const teacher = enrollment.teacher as unknown as { name: string } | null;
 
   return (
@@ -86,6 +94,7 @@ export default async function StudentSchedulePage({
           book_free_hours: settings?.book_free_hours ?? 12,
           swap_free_hours: settings?.swap_free_hours ?? 12,
         }}
+        classes={classes}
       />
     </div>
   );

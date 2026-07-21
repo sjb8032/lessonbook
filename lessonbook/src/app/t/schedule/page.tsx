@@ -40,6 +40,11 @@ export default async function TeacherSchedulePage({
     .eq("teacher_id", user!.id)
     .single();
 
+  const { data: classRows } = await supabase.rpc("get_classes");
+  const classes = ((classRows as { id: string; name: string; archived: boolean }[]) ?? [])
+    .filter((c) => !c.archived)
+    .map((c) => ({ id: c.id, name: c.name }));
+
   return (
     <div>
       <div className="mb-4 flex items-center justify-between rounded-xl bg-pen-soft px-4 py-2.5">
@@ -61,6 +66,7 @@ export default async function TeacherSchedulePage({
           book_free_hours: settings?.book_free_hours ?? 12,
           swap_free_hours: settings?.swap_free_hours ?? 12,
         }}
+        classes={classes}
       />
       <p className="mt-3 text-xs text-ink-soft">
         빈 시간을 탭해 열어두면, 수강생이 직접 보고 예약해요. 물어볼 필요가

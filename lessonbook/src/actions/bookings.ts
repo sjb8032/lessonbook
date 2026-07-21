@@ -10,10 +10,14 @@ function refresh() {
   revalidatePath("/s/me");
 }
 
-/** outcome: 'confirmed'(바로 확정) | 'pending'(선생님 승인 대기) */
-export async function bookSlot(slotId: string) {
+/** outcome: 'confirmed'(바로 확정) | 'pending'(선생님 승인 대기)
+ *  classId: 반 제한 없는 수업을 여러 반 소속 학생이 예약할 때 어느 반으로 잡을지 */
+export async function bookSlot(slotId: string, classId?: string) {
   const supabase = await createClient();
-  const { data, error } = await supabase.rpc("book_slot", { p_slot: slotId });
+  const { data, error } = await supabase.rpc("book_slot", {
+    p_slot: slotId,
+    p_class: classId ?? null,
+  });
   refresh();
   return { error: error?.message ?? null, outcome: data as string | null };
 }
