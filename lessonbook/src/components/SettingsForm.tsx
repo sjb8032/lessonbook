@@ -33,8 +33,6 @@ function Toggle({
 
 export default function SettingsForm({ initial }: { initial: TeacherSettings }) {
   const [pending, startTransition] = useTransition();
-  const [cycleLength, setCycleLength] = useState(initial.cycle_length);
-  const [cyclePrice, setCyclePrice] = useState(initial.cycle_price);
   const [bankInfo, setBankInfo] = useState(initial.bank_info ?? "");
   const [paymentLink, setPaymentLink] = useState(initial.payment_link ?? "");
   const [allowCancel, setAllowCancel] = useState(initial.allow_student_cancel);
@@ -55,8 +53,6 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
     e.preventDefault();
     startTransition(async () => {
       const res = await saveSettings({
-        cycle_length: cycleLength,
-        cycle_price: cyclePrice,
         bank_info: bankInfo,
         payment_link: paymentLink,
         allow_student_cancel: allowCancel,
@@ -77,30 +73,6 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
 
   return (
     <form onSubmit={submit} className="space-y-4">
-      <div className="flex gap-3">
-        <div className="flex-1">
-          <label className="text-sm font-medium">결제 주기 (회차)</label>
-          <input
-            type="number"
-            min={1}
-            value={cycleLength}
-            onChange={(e) => setCycleLength(Number(e.target.value))}
-            className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
-          />
-          <p className="mt-1 text-xs text-ink-soft">몇 회차마다 결제인지</p>
-        </div>
-        <div className="flex-1">
-          <label className="text-sm font-medium">사이클당 수강료 (원)</label>
-          <input
-            type="number"
-            min={0}
-            step={1000}
-            value={cyclePrice}
-            onChange={(e) => setCyclePrice(Number(e.target.value))}
-            className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
-          />
-        </div>
-      </div>
       <div>
         <label className="text-sm font-medium">계좌 안내</label>
         <input

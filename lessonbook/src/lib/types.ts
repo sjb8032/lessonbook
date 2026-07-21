@@ -10,8 +10,6 @@ export type Profile = {
 export type TeacherSettings = {
   teacher_id: string;
   lesson_minutes: number;
-  cycle_length: number;
-  cycle_price: number;
   bank_info: string | null;
   payment_link: string | null;
   join_code: string;
@@ -93,13 +91,29 @@ export type StudentOverview = {
   student_name: string;
   phone: string | null;
   started_at: string;
-  completed: number;
-  paid: number;
-  balance: number;
-  cycle_length: number;
-  cycle_price: number;
-  last_lesson: string | null;
   teacher_memo: string | null;
+  last_lesson: string | null;
+  completed: number;
+  class_names: string | null;
+  due_amount: number; // 이번 창에서 아직 입금 확인 안 된 청구액 합
+  prepay_depleted: boolean; // 선불 반 중 잔여 ≤ 0 이 있는지
+};
+
+/** 학생용 — 내가 속한 반별 정산 현황 */
+export type MyBillingRow = {
+  teacher_name: string;
+  class_id: string;
+  class_name: string;
+  price: number;
+  billing_method: BillingMethod;
+  window_start: string;
+  window_end: string;
+  window_count: number;
+  window_amount: number;
+  window_paid: boolean;
+  prepaid_total: number;
+  completed_total: number;
+  prepay_remaining: number;
 };
 
 /** 학생별 결제 방식: 월 정산(그 달 온 만큼) vs 선불(N회 미리 내고 차감) */

@@ -2,9 +2,26 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import JournalForm from "@/components/JournalForm";
-import { PaymentForm, MemoForm } from "@/components/TeacherStudentForms";
-import type { JournalEntry, Payment, StudentOverview } from "@/lib/types";
+import { MemoForm } from "@/components/TeacherStudentForms";
+import type {
+  JournalEntry,
+  SettlementRow,
+  StudentOverview,
+} from "@/lib/types";
 import { fmtDate, fmtDateTime, fmtKRW } from "@/lib/utils";
+
+type PaymentRow = {
+  id: string;
+  amount: number;
+  covers_sessions: number;
+  note: string | null;
+  paid_at: string;
+};
+
+function fmtD(dateStr: string): string {
+  const d = new Date(dateStr);
+  return `${d.getMonth() + 1}/${d.getDate()}`;
+}
 
 export default async function StudentDetailPage({
   params,
@@ -14,11 +31,19 @@ export default async function StudentDetailPage({
   const { id } = await params;
   const supabase = await createClient();
 
-  const { data: overview } = await supabase.rpc("get_students_overview");
+  const [{ data: overview }, { data: settlement }] = await Promise.all([
+    supabase.rpc("get_students_overview"),
+    supabase.rpc("get_settlement"),
+  ]);
+
   const s = ((overview as StudentOverview[]) ?? []).find(
     (x) => x.enrollment_id === id
   );
   if (!s) notFound();
+
+  const billing = ((settlement as SettlementRow[]) ?? []).filter(
+    (r) => r.enrollment_id === id
+  );
 
   const [{ data: journal }, { data: payments }, { data: upcoming }] =
     await Promise.all([
@@ -53,60 +78,89 @@ export default async function StudentDetailPage({
         <Link href="/t/students" className="text-sm text-ink-soft">
           ← 학생 목록
         </Link>
-        <div className="mt-2 flex items-start justify-between">
-          <div>
-            <h1 className="text-xl font-bold">{s.student_name}</h1>
-            <p className="mt-0.5 text-sm text-ink-soft">
-              {s.phone ?? "연락처 없음"} · {fmtDate(s.started_at)} 시작
-            </p>
-          </div>
+        <div className="mt-2">
+          <h1 className="text-xl font-bold">{s.student_name}</h1>
+          <p className="mt-0.5 text-sm text-ink-soft">
+            {s.phone ?? "연락처 없음"} · {fmtDate(s.started_at)} 시작 · 수업{" "}
+            {s.completed}회 완료
+          </p>
         </div>
       </div>
 
-      {/* 회차 · 결제 현황 */}
+      {/* 반별 정산 현황 */}
       <section className="rounded-2xl border border-line bg-card p-4">
-        <div className="flex items-end justify-between">
-          <div>
-            <p className="text-xs text-ink-soft">완료 회차</p>
-            <p className="num text-2xl font-bold">{s.completed}회</p>
-          </div>
-          <div className="text-right">
-            <p className="text-xs text-ink-soft">결제된 회차</p>
-            <p className="num text-2xl font-bold">{s.paid}회</p>
-          </div>
-          <span
-            className={`num rounded-full px-3 py-1 text-xs font-semibold ${
-              s.balance <= 0 ? "bg-redpen-soft text-redpen" : "bg-ok-soft text-ok"
-            }`}
-          >
-            {s.balance <= 0 ? "결제 필요" : `${s.balance}회 남음`}
-          </span>
+        <div className="flex items-center justify-between">
+          <p className="text-sm font-semibold">반 · 정산</p>
+          <Link href="/t/settlement" className="text-xs text-pen">
+            정산 탭에서 처리 →
+          </Link>
         </div>
-        <p className="num mt-2 text-xs text-ink-soft">
-          {s.cycle_length}회마다 {fmtKRW(s.cycle_price)}
-        </p>
-        <div className="mt-4 border-t border-line pt-4">
-          <p className="mb-2 text-sm font-semibold">입금 확인</p>
-          <PaymentForm
-            enrollmentId={id}
-            defaultAmount={s.cycle_price}
-            defaultCovers={s.cycle_length}
-          />
-        </div>
-        {(payments as Payment[])?.length > 0 && (
-          <ul className="ruled mt-4">
-            {(payments as Payment[]).map((p) => (
+        {billing.length === 0 ? (
+          <p className="mt-2 text-sm text-ink-soft">
+            아직 반에 소속되지 않았어요.{" "}
+            <Link href="/t/classes" className="text-pen underline">
+              반 탭
+            </Link>
+            에서 넣을 수 있어요.
+          </p>
+        ) : (
+          <ul className="ruled mt-2">
+            {billing.map((r) => (
+              <li key={r.class_id} className="py-3">
+                <div className="flex items-center justify-between">
+                  <p className="text-sm font-semibold">{r.class_name}</p>
+                  <span className="num text-xs text-ink-soft">
+                    회차당 {fmtKRW(r.price)}
+                  </span>
+                </div>
+                {r.billing_method === "monthly" ? (
+                  <p className="num mt-1 text-sm text-ink-soft">
+                    이번 정산({fmtD(r.window_start)}~{fmtD(r.window_end)}):{" "}
+                    {r.window_count}회 = {fmtKRW(r.window_amount)}{" "}
+                    {r.window_count > 0 &&
+                      (r.window_paid ? (
+                        <span className="font-semibold text-ok">입금됨</span>
+                      ) : (
+                        <span className="font-semibold text-redpen">
+                          미입금
+                        </span>
+                      ))}
+                  </p>
+                ) : (
+                  <p
+                    className={`num mt-1 text-sm ${
+                      r.prepay_remaining <= 0
+                        ? "font-semibold text-redpen"
+                        : "text-ink-soft"
+                    }`}
+                  >
+                    선불 잔여 {r.prepay_remaining}회 (충전 {r.prepaid_total}회 ·
+                    완료 {r.completed_total}회)
+                  </p>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      {/* 입금 내역 */}
+      <section className="rounded-2xl border border-line bg-card p-4">
+        <p className="text-sm font-semibold">입금 내역</p>
+        {(payments as PaymentRow[])?.length ? (
+          <ul className="ruled mt-2">
+            {(payments as PaymentRow[]).map((p) => (
               <li key={p.id} className="flex justify-between py-2 text-sm">
                 <span className="text-ink-soft">
                   {fmtDate(p.paid_at)}
                   {p.note ? ` · ${p.note}` : ""}
                 </span>
-                <span className="num">
-                  {fmtKRW(p.amount)} ({p.covers_sessions}회)
-                </span>
+                <span className="num">{fmtKRW(p.amount)}</span>
               </li>
             ))}
           </ul>
+        ) : (
+          <p className="mt-2 text-sm text-ink-soft">아직 입금 내역이 없어요</p>
         )}
       </section>
 

@@ -63,20 +63,3 @@ export async function completeLesson(bookingId: string) {
   return { error: error?.message ?? null };
 }
 
-export async function recordPayment(
-  enrollmentId: string,
-  amount: number,
-  covers: number,
-  note: string
-) {
-  const supabase = await createClient();
-  const { error } = await supabase.rpc("record_payment", {
-    p_enrollment: enrollmentId,
-    p_amount: amount,
-    p_covers: covers,
-    p_note: note || null,
-  });
-  revalidatePath("/t/students");
-  revalidatePath("/s/me");
-  return { error: error?.message ?? null };
-}

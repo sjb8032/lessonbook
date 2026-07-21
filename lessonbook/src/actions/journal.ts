@@ -36,8 +36,6 @@ export async function saveTeacherMemo(enrollmentId: string, memo: string) {
 }
 
 export async function saveSettings(form: {
-  cycle_length: number;
-  cycle_price: number;
   bank_info: string;
   payment_link: string;
   allow_student_cancel: boolean;
@@ -66,8 +64,6 @@ export async function saveSettings(form: {
   const { error } = await supabase
     .from("teacher_settings")
     .update({
-      cycle_length: form.cycle_length,
-      cycle_price: form.cycle_price,
       bank_info: form.bank_info || null,
       payment_link: form.payment_link || null,
       allow_student_cancel: form.allow_student_cancel,

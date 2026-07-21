@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/server";
 import type { StudentOverview } from "@/lib/types";
-import { fmtDate } from "@/lib/utils";
+import { fmtDate, fmtKRW } from "@/lib/utils";
 
 export default async function StudentsPage() {
   const supabase = await createClient();
@@ -24,23 +24,30 @@ export default async function StudentsPage() {
                 className="flex items-center justify-between py-3.5"
               >
                 <div>
-                  <p className="font-semibold">{s.student_name}</p>
+                  <p className="font-semibold">
+                    {s.student_name}
+                    {s.class_names && (
+                      <span className="ml-1.5 text-xs font-normal text-ink-soft">
+                        {s.class_names}
+                      </span>
+                    )}
+                  </p>
                   <p className="num mt-0.5 text-xs text-ink-soft">
-                    {s.completed}회 완료
+                    {s.class_names
+                      ? `수업 ${s.completed}회 완료`
+                      : "반 미배정 (녹음만 가능)"}
                     {s.last_lesson ? ` · 최근 ${fmtDate(s.last_lesson)}` : ""}
                   </p>
                 </div>
-                <span
-                  className={`num rounded-full px-3 py-1 text-xs font-semibold ${
-                    s.balance <= 0
-                      ? "bg-redpen-soft text-redpen"
-                      : "bg-ok-soft text-ok"
-                  }`}
-                >
-                  {s.balance <= 0
-                    ? `결제 필요 ${s.balance < 0 ? `(${-s.balance}회 밀림)` : ""}`
-                    : `결제분 ${s.balance}회 남음`}
-                </span>
+                {s.prepay_depleted ? (
+                  <span className="num rounded-full bg-redpen-soft px-3 py-1 text-xs font-semibold text-redpen">
+                    선불 소진
+                  </span>
+                ) : s.due_amount > 0 ? (
+                  <span className="num rounded-full bg-pen-soft px-3 py-1 text-xs font-semibold text-pen">
+                    정산 {fmtKRW(s.due_amount)}
+                  </span>
+                ) : null}
               </Link>
             </li>
           ))}
