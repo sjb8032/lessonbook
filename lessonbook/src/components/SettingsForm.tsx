@@ -46,6 +46,9 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
   const [bookFreeHours, setBookFreeHours] = useState(initial.book_free_hours);
   const [swapFreeHours, setSwapFreeHours] = useState(initial.swap_free_hours);
   const [billingDay, setBillingDay] = useState(initial.billing_day);
+  const [allowTrial, setAllowTrial] = useState(initial.allow_trial);
+  const [trialLimit, setTrialLimit] = useState(initial.trial_limit);
+  const [trialPrice, setTrialPrice] = useState(initial.trial_price);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -62,6 +65,9 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
         book_free_hours: bookFreeHours,
         swap_free_hours: swapFreeHours,
         billing_day: billingDay,
+        allow_trial: allowTrial,
+        trial_limit: trialLimit,
+        trial_price: trialPrice,
       });
       if (res.error) setError(res.error);
       else {
@@ -185,6 +191,55 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
               label="시간과 상관없이 항상 내 승인 받기"
               hint="켜면 위 기준을 무시하고 모든 교환이 내 승인을 거쳐요"
             />
+          </div>
+        )}
+      </div>
+
+      <hr className="border-line" />
+
+      <div className="space-y-4">
+        <div>
+          <p className="text-sm font-semibold">체험 수업</p>
+          <p className="mt-1 text-xs text-ink-soft">
+            시간표에서 체험용 시간을 열면 학생이 신청할 수 있어요.
+          </p>
+        </div>
+
+        <Toggle
+          checked={allowTrial}
+          onChange={setAllowTrial}
+          label="체험 신청 받기"
+          hint="끄면 체험 시간이 열려 있어도 학생이 신청할 수 없어요"
+        />
+
+        {allowTrial && (
+          <div className="flex gap-3 border-l-2 border-line pl-4">
+            <div className="w-28">
+              <label className="text-sm font-medium">1인당 횟수</label>
+              <input
+                type="number"
+                min={1}
+                value={trialLimit}
+                onChange={(e) => setTrialLimit(Number(e.target.value))}
+                className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
+              />
+            </div>
+            <div className="flex-1">
+              <label className="text-sm font-medium">체험비 (원)</label>
+              <input
+                type="number"
+                min={0}
+                step={1000}
+                value={trialPrice}
+                onChange={(e) => setTrialPrice(Number(e.target.value))}
+                className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
+              />
+              <p className="mt-1 text-xs text-ink-soft">
+                {trialPrice > 0
+                  ? "학생에게 이 금액이 안내돼요"
+                  : "0원이면 무료 체험으로 안내돼요"}
+              </p>
+            </div>
           </div>
         )}
       </div>

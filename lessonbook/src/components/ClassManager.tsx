@@ -13,7 +13,13 @@ import {
 } from "@/actions/classes";
 
 type Student = { enrollment_id: string; name: string };
-type FormValues = { name: string; description: string; price: number };
+type FormValues = {
+  name: string;
+  description: string;
+  price: number;
+  default_billing_method: BillingMethod;
+  default_prepay_sessions: number;
+};
 type Billing = { method: BillingMethod; prepay: number | null };
 
 type MembershipRow = {
@@ -71,9 +77,15 @@ export default function ClassManager({
   function toggleMember(classId: string, enr: string) {
     const k = key(classId, enr);
     const willAdd = !members.has(k);
+    // 새로 넣는 학생은 반 기본 결제 방식을 물려받는다 (서버 트리거와 동일)
+    const cls = classes.find((c) => c.id === classId);
+    const inherited: Billing =
+      cls?.default_billing_method === "prepay"
+        ? { method: "prepay", prepay: cls.default_prepay_sessions }
+        : { method: "monthly", prepay: null };
     setMembers((prev) => {
       const next = new Map(prev);
-      if (willAdd) next.set(k, { method: "monthly", prepay: null });
+      if (willAdd) next.set(k, inherited);
       else next.delete(k);
       return next;
     });
@@ -85,7 +97,7 @@ export default function ClassManager({
         setMembers((prev) => {
           const next = new Map(prev);
           if (willAdd) next.delete(k);
-          else next.set(k, { method: "monthly", prepay: null });
+          else next.set(k, inherited);
           return next;
         });
         setError(res.error);
@@ -151,6 +163,8 @@ export default function ClassManager({
               name: c.name,
               description: c.description ?? "",
               price: c.price,
+              default_billing_method: c.default_billing_method,
+              default_prepay_sessions: c.default_prepay_sessions,
             }}
             pending={pending}
             onCancel={() => setEditing(null)}
@@ -168,7 +182,10 @@ export default function ClassManager({
                 )}
                 <p className="mt-1 text-xs text-ink-soft">
                   학생 {memberCount(c.id)}명 ·{" "}
-                  <span className="num">{fmtRate(c.price)}</span>
+                  <span className="num">{fmtRate(c.price)}</span> · 기본{" "}
+                  {c.default_billing_method === "prepay"
+                    ? `${c.default_prepay_sessions}회 선불`
+                    : "달마다 정산"}
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
@@ -347,6 +364,10 @@ function ClassForm({
   const [name, setName] = useState(initial?.name ?? "");
   const [desc, setDesc] = useState(initial?.description ?? "");
   const [price, setPrice] = useState(initial?.price ?? 0);
+  const [method, setMethod] = useState<BillingMethod>(
+    initial?.default_billing_method ?? "monthly"
+  );
+  const [prepayN, setPrepayN] = useState(initial?.default_prepay_sessions ?? 4);
 
   return (
     <div className="rounded-2xl border border-pen bg-card p-4">
@@ -377,14 +398,64 @@ function ClassForm({
         className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
       />
       <p className="mt-1 text-xs text-ink-soft">
-        수업 한 번당 금액이에요. 학생마다 이 단가로 월 정산하거나 선불로 받을 수
-        있어요.
+        수업 한 번당 금액이에요. 아래 기본 방식으로 정산돼요.
+      </p>
+
+      <label className="mt-3 block text-sm font-medium">기본 결제 방식</label>
+      <div className="mt-1 flex gap-1 rounded-xl bg-line/40 p-1">
+        <button
+          type="button"
+          onClick={() => setMethod("monthly")}
+          className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+            method === "monthly" ? "bg-card text-pen shadow-sm" : "text-ink-soft"
+          }`}
+        >
+          달마다 정산
+        </button>
+        <button
+          type="button"
+          onClick={() => setMethod("prepay")}
+          className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+            method === "prepay" ? "bg-card text-pen shadow-sm" : "text-ink-soft"
+          }`}
+        >
+          회차 선불
+        </button>
+      </div>
+      {method === "prepay" ? (
+        <div className="mt-2 flex items-center gap-2 text-sm text-ink-soft">
+          <input
+            type="number"
+            min={1}
+            value={prepayN}
+            onChange={(e) => setPrepayN(Number(e.target.value))}
+            className="num w-20 rounded-xl border border-line bg-card px-3 py-2 text-center"
+          />
+          <span className="num">
+            회씩 미리 받기 · {(price * prepayN).toLocaleString("ko-KR")}원
+          </span>
+        </div>
+      ) : (
+        <p className="mt-1 text-xs text-ink-soft">
+          정산일마다 그 달 온 만큼 청구해요
+        </p>
+      )}
+      <p className="mt-1 text-xs text-ink-soft">
+        새로 반에 넣는 학생에게 적용돼요. 학생마다 따로 바꿀 수도 있어요.
       </p>
 
       <div className="mt-4 flex gap-2">
         <button
           disabled={pending || !name.trim()}
-          onClick={() => onSubmit({ name, description: desc, price })}
+          onClick={() =>
+            onSubmit({
+              name,
+              description: desc,
+              price,
+              default_billing_method: method,
+              default_prepay_sessions: prepayN,
+            })
+          }
           className="flex-1 rounded-xl bg-pen py-3 font-semibold text-white disabled:opacity-50"
         >
           저장

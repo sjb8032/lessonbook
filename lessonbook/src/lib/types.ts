@@ -20,6 +20,9 @@ export type TeacherSettings = {
   book_free_hours: number;
   swap_free_hours: number;
   billing_day: number;
+  allow_trial: boolean;
+  trial_limit: number;
+  trial_price: number;
 };
 
 /** 정산 탭 한 줄 = 학생×반 */
@@ -49,6 +52,9 @@ export type BookingPolicy = {
   cancel_free_hours: number;
   book_free_hours: number;
   swap_free_hours: number;
+  allow_trial: boolean;
+  trial_limit: number;
+  trial_price: number;
 };
 
 export type BookingStatus = "pending" | "confirmed" | "completed";
@@ -126,6 +132,8 @@ export type ClassRow = {
   archived: boolean;
   member_count: number;
   price: number; // 회차당 단가(원)
+  default_billing_method: BillingMethod; // 새 학생이 물려받는 기본값
+  default_prepay_sessions: number;
 };
 
 export type ClassRosterRow = {

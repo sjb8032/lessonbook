@@ -47,14 +47,14 @@ type Sheet = { kind: "slot"; row: ScheduleRow } | null;
 export default function DaySchedule({
   role,
   rows,
-  weekOffset,
+  monthOffset,
   lessonMinutes,
   policy,
   classes,
 }: {
   role: "teacher" | "student";
   rows: ScheduleRow[];
-  weekOffset: number;
+  monthOffset: number;
   lessonMinutes: number;
   policy: BookingPolicy;
   // 선생님: 자기 반 전체 / 학생: 내가 속한 반 (예약 시 반 선택용)
@@ -71,19 +71,54 @@ export default function DaySchedule({
   const [openKind, setOpenKind] = useState<SlotKind>("lesson");
   const [openClassId, setOpenClassId] = useState<string>(""); // "" = 제한 없음
 
-  const weekStart = useMemo(
-    () => addDays(startOfWeek(new Date()), weekOffset * 7),
-    [weekOffset]
-  );
-  const days = useMemo(
-    () => Array.from({ length: 7 }, (_, i) => addDays(weekStart, i)),
-    [weekStart]
-  );
+  const monthStart = useMemo(() => {
+    const d = new Date();
+    d.setHours(0, 0, 0, 0);
+    d.setDate(1);
+    d.setMonth(d.getMonth() + monthOffset);
+    return d;
+  }, [monthOffset]);
+  const monthDays = useMemo(() => {
+    const n = new Date(
+      monthStart.getFullYear(),
+      monthStart.getMonth() + 1,
+      0
+    ).getDate();
+    return Array.from(
+      { length: n },
+      (_, i) => new Date(monthStart.getFullYear(), monthStart.getMonth(), i + 1)
+    );
+  }, [monthStart]);
+  const leadingBlanks = (monthStart.getDay() + 6) % 7; // 월요일 시작 달력
 
   const today = new Date();
-  const defaultDay = days.findIndex((d) => sameDate(d, today));
-  const [dayIdx, setDayIdx] = useState(defaultDay >= 0 ? defaultDay : 0);
-  const selectedDay = days[dayIdx];
+  const [dayIdx, setDayIdx] = useState(
+    monthOffset === 0 ? today.getDate() - 1 : 0
+  );
+  const selectedDay = monthDays[Math.min(dayIdx, monthDays.length - 1)];
+
+  // 달을 옮기면 오늘(이번 달) 또는 1일로 선택 초기화
+  useEffect(() => {
+    setDayIdx(monthOffset === 0 ? new Date().getDate() - 1 : 0);
+  }, [monthOffset]);
+
+  // 날짜별 요약: 전체 슬롯 수 / 예약(대기·확정·완료 포함)된 수
+  const dayStats = useMemo(() => {
+    const map = new Map<number, { total: number; booked: number }>();
+    for (const r of rows) {
+      const d = new Date(r.starts_at);
+      if (
+        d.getFullYear() !== monthStart.getFullYear() ||
+        d.getMonth() !== monthStart.getMonth()
+      )
+        continue;
+      const s = map.get(d.getDate()) ?? { total: 0, booked: 0 };
+      s.total++;
+      if (r.booking_id) s.booked++;
+      map.set(d.getDate(), s);
+    }
+    return map;
+  }, [rows, monthStart]);
 
   const dayRows = useMemo(
     () =>
@@ -106,13 +141,13 @@ export default function DaySchedule({
   const skipClickRef = useRef(false);
   const listRef = useRef<HTMLDivElement>(null);
 
-  // 날짜/주를 옮기면 선택은 초기화하고, 목록은 이른 아침이 아니라 활동 시간대부터 보이게
+  // 날짜/달을 옮기면 선택은 초기화하고, 목록은 이른 아침이 아니라 활동 시간대부터 보이게
   useEffect(() => {
     setSelected(new Set());
     const el = listRef.current;
     const target = el?.querySelector<HTMLElement>(`[data-hour="${SCROLL_TO_HOUR}"]`);
     if (el && target) el.scrollTop = target.offsetTop;
-  }, [dayIdx, weekOffset]);
+  }, [dayIdx, monthOffset]);
 
   function hourAt(x: number, y: number): number | null {
     const el = document
@@ -202,58 +237,83 @@ export default function DaySchedule({
 
   return (
     <div>
-      {/* 주 이동 */}
+      {/* 달 이동 */}
       <div className="flex items-center justify-between px-1">
         <Link
-          href={`?w=${weekOffset - 1}`}
+          href={`?m=${monthOffset - 1}`}
           className="rounded-lg px-3 py-1 text-sm text-ink-soft hover:bg-line/50"
         >
-          ← 지난주
+          ← 지난달
         </Link>
         <span className="num text-sm font-semibold">
-          {fmtDay(weekStart)} – {fmtDay(days[6])}
+          {monthStart.getFullYear()}년 {monthStart.getMonth() + 1}월
         </span>
         <Link
-          href={`?w=${weekOffset + 1}`}
+          href={`?m=${monthOffset + 1}`}
           className="rounded-lg px-3 py-1 text-sm text-ink-soft hover:bg-line/50"
         >
-          다음주 →
+          다음달 →
         </Link>
       </div>
 
-      {/* 요일 스트립 */}
-      <div className="mt-3 grid grid-cols-7 gap-1">
-        {days.map((d, i) => {
-          const count = rows.filter((r) =>
-            sameDate(new Date(r.starts_at), d)
-          ).length;
-          const active = i === dayIdx;
-          return (
-            <button
-              key={i}
-              onClick={() => setDayIdx(i)}
-              className={`rounded-xl py-2 text-center text-sm ${
-                active
-                  ? "bg-ink font-semibold text-white"
-                  : "bg-card text-ink-soft hover:bg-pen-soft"
-              }`}
-            >
-              <div>{["월", "화", "수", "목", "금", "토", "일"][i]}</div>
-              <div className="num text-xs">{d.getDate()}</div>
-              {count > 0 && (
+      {/* 월 달력 — 날짜마다 예약/전체 요약 */}
+      <div className="mt-3 rounded-2xl border border-line bg-card p-2">
+        <div className="grid grid-cols-7 gap-1 text-center">
+          {["월", "화", "수", "목", "금", "토", "일"].map((d) => (
+            <div key={d} className="py-1 text-xs font-medium text-ink-soft">
+              {d}
+            </div>
+          ))}
+          {Array.from({ length: leadingBlanks }, (_, i) => (
+            <div key={`b${i}`} />
+          ))}
+          {monthDays.map((d, i) => {
+            const stats = dayStats.get(d.getDate());
+            const active = i === dayIdx;
+            const isToday = sameDate(d, today);
+            const full = stats && stats.booked >= stats.total;
+            return (
+              <button
+                key={i}
+                onClick={() => setDayIdx(i)}
+                className={`rounded-lg py-1 ${
+                  active
+                    ? "bg-ink text-white"
+                    : isToday
+                    ? "bg-pen-soft"
+                    : "hover:bg-line/40"
+                }`}
+              >
+                <div className={`num text-sm ${active ? "font-semibold" : ""}`}>
+                  {d.getDate()}
+                </div>
                 <div
-                  className={`mx-auto mt-1 h-1 w-1 rounded-full ${
-                    active ? "bg-white" : "bg-pen"
+                  className={`num h-4 text-[10px] leading-4 ${
+                    active
+                      ? "text-white/80"
+                      : !stats
+                      ? ""
+                      : full
+                      ? "text-ink-soft"
+                      : "font-semibold text-pen"
                   }`}
-                />
-              )}
-            </button>
-          );
-        })}
+                >
+                  {stats ? `${stats.booked}/${stats.total}` : ""}
+                </div>
+              </button>
+            );
+          })}
+        </div>
+        <p className="mt-1 px-1 pb-1 text-right text-[10px] text-ink-soft">
+          예약 / 열린 시간
+        </p>
       </div>
 
+      {/* 선택한 날짜 */}
+      <p className="mt-4 px-1 text-sm font-semibold">{fmtDay(selectedDay)}</p>
+
       {/* 하루 시간표 — 괘선 리스트 */}
-      <div className="mt-4 rounded-2xl border border-line bg-card px-4 py-1">
+      <div className="mt-2 rounded-2xl border border-line bg-card px-4 py-1">
         {role === "teacher" ? (
           <div
             ref={listRef}
@@ -335,9 +395,13 @@ export default function DaySchedule({
             </button>
           </div>
 
-          {/* 종류 */}
+          {/* 종류 — 체험을 꺼두면 체험 옵션은 숨김 */}
           <div className="flex gap-1 rounded-xl bg-line/40 p-1">
-            {(["lesson", "recording", "trial"] as SlotKind[]).map((k) => (
+            {(
+              policy.allow_trial
+                ? (["lesson", "recording", "trial"] as SlotKind[])
+                : (["lesson", "recording"] as SlotKind[])
+            ).map((k) => (
               <button
                 key={k}
                 onClick={() => setOpenKind(k)}
@@ -400,14 +464,13 @@ export default function DaySchedule({
       {role === "teacher" && (
         <button
           disabled={pending}
-          onClick={() =>
-            run(() =>
-              copyWeek(weekStart.toISOString(), addDays(weekStart, 7).toISOString())
-            )
-          }
+          onClick={() => {
+            const ws = startOfWeek(selectedDay);
+            run(() => copyWeek(ws.toISOString(), addDays(ws, 7).toISOString()));
+          }}
           className="mt-3 w-full rounded-xl border border-line bg-card py-2.5 text-sm text-ink-soft hover:border-pen hover:text-pen disabled:opacity-50"
         >
-          이번 주 시간표를 다음 주로 복사
+          선택한 날짜의 주 시간표를 다음 주로 복사
         </button>
       )}
 
@@ -665,6 +728,17 @@ function SlotSheet({
               ? `${KIND_LABEL[row.kind]}이 ${policy.book_free_hours}시간 안쪽이라 선생님 승인을 받아야 확정돼요`
               : `예약 가능한 ${KIND_LABEL[row.kind]} 시간이에요`}
           </p>
+          {row.kind === "trial" && (
+            <p className="mt-1 text-xs text-ink-soft">
+              체험비{" "}
+              <b className="num">
+                {policy.trial_price > 0
+                  ? `${policy.trial_price.toLocaleString("ko-KR")}원`
+                  : "무료"}
+              </b>
+              {` · 1인당 ${policy.trial_limit}회까지 신청할 수 있어요`}
+            </p>
+          )}
 
           {needClassPick && (
             <>

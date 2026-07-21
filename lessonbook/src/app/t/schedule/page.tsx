@@ -2,31 +2,29 @@ import { createClient } from "@/lib/supabase/server";
 import DaySchedule from "@/components/DaySchedule";
 import type { ScheduleRow } from "@/lib/types";
 
-function weekRange(offset: number) {
-  const now = new Date();
-  now.setHours(0, 0, 0, 0);
-  const day = now.getDay();
-  const diff = day === 0 ? -6 : 1 - day;
-  const start = new Date(now);
-  start.setDate(start.getDate() + diff + offset * 7);
+function monthRange(offset: number) {
+  const start = new Date();
+  start.setHours(0, 0, 0, 0);
+  start.setDate(1);
+  start.setMonth(start.getMonth() + offset);
   const end = new Date(start);
-  end.setDate(end.getDate() + 7);
+  end.setMonth(end.getMonth() + 1);
   return { start, end };
 }
 
 export default async function TeacherSchedulePage({
   searchParams,
 }: {
-  searchParams: Promise<{ w?: string }>;
+  searchParams: Promise<{ m?: string }>;
 }) {
-  const { w } = await searchParams;
-  const offset = Number(w ?? 0) || 0;
+  const { m } = await searchParams;
+  const offset = Number(m ?? 0) || 0;
   const supabase = await createClient();
   const {
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { start, end } = weekRange(offset);
+  const { start, end } = monthRange(offset);
   const { data: rows } = await supabase.rpc("get_week_schedule", {
     p_teacher: user!.id,
     p_from: start.toISOString(),
@@ -35,7 +33,7 @@ export default async function TeacherSchedulePage({
   const { data: settings } = await supabase
     .from("teacher_settings")
     .select(
-      "lesson_minutes, join_code, allow_student_cancel, allow_student_swap, swap_needs_approval, cancel_free_hours, book_free_hours, swap_free_hours"
+      "lesson_minutes, join_code, allow_student_cancel, allow_student_swap, swap_needs_approval, cancel_free_hours, book_free_hours, swap_free_hours, allow_trial, trial_limit, trial_price"
     )
     .eq("teacher_id", user!.id)
     .single();
@@ -56,7 +54,7 @@ export default async function TeacherSchedulePage({
       <DaySchedule
         role="teacher"
         rows={(rows as ScheduleRow[]) ?? []}
-        weekOffset={offset}
+        monthOffset={offset}
         lessonMinutes={settings?.lesson_minutes ?? 60}
         policy={{
           allow_student_cancel: settings?.allow_student_cancel ?? true,
@@ -65,6 +63,9 @@ export default async function TeacherSchedulePage({
           cancel_free_hours: settings?.cancel_free_hours ?? 12,
           book_free_hours: settings?.book_free_hours ?? 12,
           swap_free_hours: settings?.swap_free_hours ?? 12,
+          allow_trial: settings?.allow_trial ?? true,
+          trial_limit: settings?.trial_limit ?? 1,
+          trial_price: settings?.trial_price ?? 0,
         }}
         classes={classes}
       />

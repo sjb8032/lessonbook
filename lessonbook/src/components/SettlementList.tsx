@@ -9,6 +9,7 @@ import {
   cancelSettlement,
   addPrepay,
 } from "@/actions/settlement";
+import { setMemberBilling } from "@/actions/classes";
 
 function fmtD(dateStr: string): string {
   const d = new Date(dateStr);
@@ -134,6 +135,22 @@ export default function SettlementList({ rows }: { rows: SettlementRow[] }) {
                         </button>
                       ))}
                   </div>
+                  <button
+                    disabled={pending && busy === key}
+                    onClick={() =>
+                      run(key, () =>
+                        setMemberBilling(
+                          r.class_id,
+                          r.enrollment_id,
+                          "prepay",
+                          r.prepay_sessions ?? 4
+                        )
+                      )
+                    }
+                    className="mt-2 text-xs text-ink-soft underline hover:text-pen"
+                  >
+                    회차 선불로 전환
+                  </button>
                 </div>
               );
             })}
@@ -192,6 +209,17 @@ export default function SettlementList({ rows }: { rows: SettlementRow[] }) {
                       </span>
                     </button>
                   </div>
+                  <button
+                    disabled={pending && busy === key}
+                    onClick={() =>
+                      run(key, () =>
+                        setMemberBilling(r.class_id, r.enrollment_id, "monthly", null)
+                      )
+                    }
+                    className="mt-2 text-xs text-ink-soft underline hover:text-pen"
+                  >
+                    달마다 정산으로 전환
+                  </button>
                 </div>
               );
             })}

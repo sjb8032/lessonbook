@@ -45,6 +45,9 @@ export async function saveSettings(form: {
   book_free_hours: number;
   swap_free_hours: number;
   billing_day: number;
+  allow_trial: boolean;
+  trial_limit: number;
+  trial_price: number;
 }) {
   const supabase = await createClient();
   const {
@@ -61,6 +64,12 @@ export async function saveSettings(form: {
   if (form.billing_day < 1 || form.billing_day > 28) {
     return { error: "정산일은 1~28일 사이로 정해 주세요" };
   }
+  if (form.trial_limit < 1) {
+    return { error: "체험 횟수는 1 이상이어야 해요" };
+  }
+  if (form.trial_price < 0) {
+    return { error: "체험비는 0 이상이어야 해요" };
+  }
   const { error } = await supabase
     .from("teacher_settings")
     .update({
@@ -73,6 +82,9 @@ export async function saveSettings(form: {
       book_free_hours: form.book_free_hours,
       swap_free_hours: form.swap_free_hours,
       billing_day: form.billing_day,
+      allow_trial: form.allow_trial,
+      trial_limit: form.trial_limit,
+      trial_price: form.trial_price,
     })
     .eq("teacher_id", user.id);
   revalidatePath("/t/settings");
