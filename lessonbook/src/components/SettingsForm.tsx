@@ -47,6 +47,7 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
   );
   const [bookFreeHours, setBookFreeHours] = useState(initial.book_free_hours);
   const [swapFreeHours, setSwapFreeHours] = useState(initial.swap_free_hours);
+  const [billingDay, setBillingDay] = useState(initial.billing_day);
   const [saved, setSaved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -64,6 +65,7 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
         cancel_free_hours: cancelFreeHours,
         book_free_hours: bookFreeHours,
         swap_free_hours: swapFreeHours,
+        billing_day: billingDay,
       });
       if (res.error) setError(res.error);
       else {
@@ -118,6 +120,21 @@ export default function SettingsForm({ initial }: { initial: TeacherSettings }) 
         />
         <p className="mt-1 text-xs text-ink-soft">
           결제 회차가 되면 학생에게 이 링크가 보여요
+        </p>
+      </div>
+
+      <div>
+        <label className="text-sm font-medium">정산일 (매달 며칠)</label>
+        <input
+          type="number"
+          min={1}
+          max={28}
+          value={billingDay}
+          onChange={(e) => setBillingDay(Number(e.target.value))}
+          className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
+        />
+        <p className="mt-1 text-xs text-ink-soft">
+          예: 10일이면 지난달 11일~이번달 10일 동안 온 만큼을 정산해요 (1~28일)
         </p>
       </div>
 

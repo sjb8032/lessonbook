@@ -7,6 +7,7 @@ const TABS: Record<Role, { href: string; label: string }[]> = {
     { href: "/t/schedule", label: "스케줄" },
     { href: "/t/requests", label: "승인" },
     { href: "/t/classes", label: "반" },
+    { href: "/t/settlement", label: "정산" },
     { href: "/t/students", label: "학생" },
     { href: "/t/settings", label: "설정" },
   ],

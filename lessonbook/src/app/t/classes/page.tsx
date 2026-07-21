@@ -18,7 +18,7 @@ export default async function ClassesPage() {
 
   const { data: memberships } = await supabase
     .from("class_members")
-    .select("class_id, enrollment_id");
+    .select("class_id, enrollment_id, billing_method, prepay_sessions");
 
   const students = (enrollments ?? []).map((e) => ({
     enrollment_id: e.id as string,
@@ -39,7 +39,12 @@ export default async function ClassesPage() {
         classes={(classes as ClassRow[]) ?? []}
         students={students}
         memberships={
-          (memberships as { class_id: string; enrollment_id: string }[]) ?? []
+          (memberships as {
+            class_id: string;
+            enrollment_id: string;
+            billing_method: "monthly" | "prepay";
+            prepay_sessions: number | null;
+          }[]) ?? []
         }
       />
     </div>

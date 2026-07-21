@@ -2,15 +2,28 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { ClassRow } from "@/lib/types";
+import type { BillingMethod, ClassRow } from "@/lib/types";
+import { fmtRate } from "@/lib/utils";
 import {
   createClass,
   updateClass,
   setClassArchived,
   setClassMember,
+  setMemberBilling,
 } from "@/actions/classes";
 
 type Student = { enrollment_id: string; name: string };
+type FormValues = { name: string; description: string; price: number };
+type Billing = { method: BillingMethod; prepay: number | null };
+
+type MembershipRow = {
+  class_id: string;
+  enrollment_id: string;
+  billing_method: BillingMethod;
+  prepay_sessions: number | null;
+};
+
+const key = (classId: string, enr: string) => `${classId}:${enr}`;
 
 export default function ClassManager({
   classes,
@@ -19,23 +32,29 @@ export default function ClassManager({
 }: {
   classes: ClassRow[];
   students: Student[];
-  memberships: { class_id: string; enrollment_id: string }[];
+  memberships: MembershipRow[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
 
-  // "classId:enrollmentId" 집합으로 소속 여부를 관리 (토글이 부드럽게)
-  const [members, setMembers] = useState<Set<string>>(
-    () => new Set(memberships.map((m) => `${m.class_id}:${m.enrollment_id}`))
-  );
-  const [counts, setCounts] = useState<Record<string, number>>(() =>
-    Object.fromEntries(classes.map((c) => [c.id, c.member_count]))
+  // "classId:enrollmentId" → 결제 방식. Map 에 있으면 소속.
+  const [members, setMembers] = useState<Map<string, Billing>>(
+    () =>
+      new Map(
+        memberships.map((m) => [
+          key(m.class_id, m.enrollment_id),
+          { method: m.billing_method, prepay: m.prepay_sessions },
+        ])
+      )
   );
 
   const [expanded, setExpanded] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
+
+  const memberCount = (classId: string) =>
+    [...members.keys()].filter((k) => k.startsWith(`${classId}:`)).length;
 
   function run(fn: () => Promise<{ error: string | null }>, after?: () => void) {
     setError(null);
@@ -49,37 +68,47 @@ export default function ClassManager({
     });
   }
 
-  function toggleMember(classId: string, enrollmentId: string) {
-    const key = `${classId}:${enrollmentId}`;
-    const willAdd = !members.has(key);
-    // 낙관적 반영
+  function toggleMember(classId: string, enr: string) {
+    const k = key(classId, enr);
+    const willAdd = !members.has(k);
     setMembers((prev) => {
-      const next = new Set(prev);
-      if (willAdd) next.add(key);
-      else next.delete(key);
+      const next = new Map(prev);
+      if (willAdd) next.set(k, { method: "monthly", prepay: null });
+      else next.delete(k);
       return next;
     });
-    setCounts((prev) => ({
-      ...prev,
-      [classId]: (prev[classId] ?? 0) + (willAdd ? 1 : -1),
-    }));
     setError(null);
     startTransition(async () => {
-      const res = await setClassMember(classId, enrollmentId, willAdd);
+      const res = await setClassMember(classId, enr, willAdd);
       if (res.error) {
         // 실패 시 되돌림
         setMembers((prev) => {
-          const next = new Set(prev);
-          if (willAdd) next.delete(key);
-          else next.add(key);
+          const next = new Map(prev);
+          if (willAdd) next.delete(k);
+          else next.set(k, { method: "monthly", prepay: null });
           return next;
         });
-        setCounts((prev) => ({
-          ...prev,
-          [classId]: (prev[classId] ?? 0) + (willAdd ? -1 : 1),
-        }));
         setError(res.error);
       }
+    });
+  }
+
+  function commitBilling(
+    classId: string,
+    enr: string,
+    method: BillingMethod,
+    prepay: number | null
+  ) {
+    const k = key(classId, enr);
+    setMembers((prev) => {
+      const next = new Map(prev);
+      next.set(k, { method, prepay });
+      return next;
+    });
+    setError(null);
+    startTransition(async () => {
+      const res = await setMemberBilling(classId, enr, method, prepay);
+      if (res.error) setError(res.error);
     });
   }
 
@@ -94,8 +123,8 @@ export default function ClassManager({
         <ClassForm
           pending={pending}
           onCancel={() => setCreating(false)}
-          onSubmit={(name, desc) =>
-            run(() => createClass(name, desc), () => setCreating(false))
+          onSubmit={(form) =>
+            run(() => createClass(form), () => setCreating(false))
           }
         />
       ) : (
@@ -109,8 +138,8 @@ export default function ClassManager({
 
       {active.length === 0 && !creating && (
         <p className="rounded-2xl border border-line bg-card p-6 text-center text-sm text-ink-soft">
-          아직 만든 반이 없어요. 반을 만들면 학생을 넣고, 시간표에서 그 반만
-          예약할 수 있는 시간을 열 수 있어요.
+          아직 만든 반이 없어요. 반을 만들면 학생을 넣고, 학생마다 결제 방식을
+          정할 수 있어요.
         </p>
       )}
 
@@ -118,12 +147,15 @@ export default function ClassManager({
         editing === c.id ? (
           <ClassForm
             key={c.id}
-            initialName={c.name}
-            initialDesc={c.description ?? ""}
+            initial={{
+              name: c.name,
+              description: c.description ?? "",
+              price: c.price,
+            }}
             pending={pending}
             onCancel={() => setEditing(null)}
-            onSubmit={(name, desc) =>
-              run(() => updateClass(c.id, name, desc), () => setEditing(null))
+            onSubmit={(form) =>
+              run(() => updateClass(c.id, form), () => setEditing(null))
             }
           />
         ) : (
@@ -135,7 +167,8 @@ export default function ClassManager({
                   <p className="mt-0.5 text-sm text-ink-soft">{c.description}</p>
                 )}
                 <p className="mt-1 text-xs text-ink-soft">
-                  학생 {counts[c.id] ?? 0}명
+                  학생 {memberCount(c.id)}명 ·{" "}
+                  <span className="num">{fmtRate(c.price)}</span>
                 </p>
               </div>
               <div className="flex shrink-0 gap-1">
@@ -159,37 +192,54 @@ export default function ClassManager({
               onClick={() => setExpanded(expanded === c.id ? null : c.id)}
               className="mt-3 w-full rounded-lg bg-pen-soft py-2 text-sm font-medium text-pen"
             >
-              {expanded === c.id ? "닫기" : "학생 관리"}
+              {expanded === c.id ? "닫기" : "학생 · 결제 방식"}
             </button>
 
             {expanded === c.id && (
-              <div className="mt-3 border-t border-line pt-3">
+              <div className="mt-3 space-y-2 border-t border-line pt-3">
                 {students.length === 0 ? (
                   <p className="text-sm text-ink-soft">
                     아직 연결된 학생이 없어요. 학생이 가입 코드로 연결하면 여기서
                     반에 넣을 수 있어요.
                   </p>
                 ) : (
-                  <ul className="space-y-1">
-                    {students.map((s) => {
-                      const on = members.has(`${c.id}:${s.enrollment_id}`);
-                      return (
-                        <li key={s.enrollment_id}>
-                          <label className="flex cursor-pointer items-center gap-3 rounded-lg px-2 py-2 hover:bg-line/30">
-                            <input
-                              type="checkbox"
-                              checked={on}
-                              onChange={() =>
-                                toggleMember(c.id, s.enrollment_id)
-                              }
-                              className="h-5 w-5 accent-[var(--color-pen)]"
-                            />
-                            <span className="text-sm">{s.name}</span>
-                          </label>
-                        </li>
-                      );
-                    })}
-                  </ul>
+                  students.map((s) => {
+                    const billing = members.get(key(c.id, s.enrollment_id));
+                    const isMember = !!billing;
+                    return (
+                      <div
+                        key={s.enrollment_id}
+                        className="rounded-xl bg-line/20 p-2"
+                      >
+                        <label className="flex cursor-pointer items-center gap-3 px-1 py-1">
+                          <input
+                            type="checkbox"
+                            checked={isMember}
+                            onChange={() =>
+                              toggleMember(c.id, s.enrollment_id)
+                            }
+                            className="h-5 w-5 accent-[var(--color-pen)]"
+                          />
+                          <span className="text-sm font-medium">{s.name}</span>
+                        </label>
+
+                        {isMember && billing && (
+                          <MemberBilling
+                            billing={billing}
+                            rate={c.price}
+                            onChange={(method, prepay) =>
+                              commitBilling(
+                                c.id,
+                                s.enrollment_id,
+                                method,
+                                prepay
+                              )
+                            }
+                          />
+                        )}
+                      </div>
+                    );
+                  })
                 )}
               </div>
             )}
@@ -223,21 +273,80 @@ export default function ClassManager({
   );
 }
 
+/** 한 학생의 결제 방식: 월 정산 / 선불 N회 */
+function MemberBilling({
+  billing,
+  rate,
+  onChange,
+}: {
+  billing: Billing;
+  rate: number;
+  onChange: (method: BillingMethod, prepay: number | null) => void;
+}) {
+  const [n, setN] = useState(billing.prepay ?? 4);
+
+  return (
+    <div className="mt-1 pl-8">
+      <div className="flex gap-1 rounded-lg bg-card p-1">
+        <button
+          onClick={() => onChange("monthly", null)}
+          className={`flex-1 rounded-md py-1.5 text-xs font-medium ${
+            billing.method === "monthly"
+              ? "bg-pen-soft text-pen"
+              : "text-ink-soft"
+          }`}
+        >
+          월 정산
+        </button>
+        <button
+          onClick={() => onChange("prepay", n)}
+          className={`flex-1 rounded-md py-1.5 text-xs font-medium ${
+            billing.method === "prepay"
+              ? "bg-pen-soft text-pen"
+              : "text-ink-soft"
+          }`}
+        >
+          선불
+        </button>
+      </div>
+
+      {billing.method === "prepay" ? (
+        <div className="mt-1.5 flex items-center gap-2 text-xs text-ink-soft">
+          <input
+            type="number"
+            min={1}
+            value={n}
+            onChange={(e) => setN(Number(e.target.value))}
+            onBlur={() => onChange("prepay", n)}
+            className="num w-16 rounded-lg border border-line bg-card px-2 py-1.5 text-center"
+          />
+          <span className="num">
+            회씩 선불 · {(rate * n).toLocaleString("ko-KR")}원
+          </span>
+        </div>
+      ) : (
+        <p className="mt-1.5 pl-1 text-xs text-ink-soft">
+          정산일에 그 달 온 만큼 청구
+        </p>
+      )}
+    </div>
+  );
+}
+
 function ClassForm({
-  initialName = "",
-  initialDesc = "",
+  initial,
   pending,
   onSubmit,
   onCancel,
 }: {
-  initialName?: string;
-  initialDesc?: string;
+  initial?: FormValues;
   pending: boolean;
-  onSubmit: (name: string, desc: string) => void;
+  onSubmit: (form: FormValues) => void;
   onCancel: () => void;
 }) {
-  const [name, setName] = useState(initialName);
-  const [desc, setDesc] = useState(initialDesc);
+  const [name, setName] = useState(initial?.name ?? "");
+  const [desc, setDesc] = useState(initial?.description ?? "");
+  const [price, setPrice] = useState(initial?.price ?? 0);
 
   return (
     <div className="rounded-2xl border border-pen bg-card p-4">
@@ -249,6 +358,7 @@ function ClassForm({
         className="mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
         autoFocus
       />
+
       <label className="mt-3 block text-sm font-medium">설명 (선택)</label>
       <input
         value={desc}
@@ -256,10 +366,25 @@ function ClassForm({
         placeholder="반 소개나 메모"
         className="mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
       />
+
+      <label className="mt-3 block text-sm font-medium">회차당 단가 (원)</label>
+      <input
+        type="number"
+        min={0}
+        step={1000}
+        value={price}
+        onChange={(e) => setPrice(Number(e.target.value))}
+        className="num mt-1 w-full rounded-xl border border-line bg-card px-4 py-3"
+      />
+      <p className="mt-1 text-xs text-ink-soft">
+        수업 한 번당 금액이에요. 학생마다 이 단가로 월 정산하거나 선불로 받을 수
+        있어요.
+      </p>
+
       <div className="mt-4 flex gap-2">
         <button
           disabled={pending || !name.trim()}
-          onClick={() => onSubmit(name, desc)}
+          onClick={() => onSubmit({ name, description: desc, price })}
           className="flex-1 rounded-xl bg-pen py-3 font-semibold text-white disabled:opacity-50"
         >
           저장

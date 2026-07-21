@@ -41,6 +41,11 @@ export function fmtKRW(n: number): string {
   return n.toLocaleString("ko-KR") + "원";
 }
 
+/** 반 회차당 단가를 문구로 (예: "회차당 30,000원") */
+export function fmtRate(price: number): string {
+  return price > 0 ? `회차당 ${fmtKRW(price)}` : "단가 미설정";
+}
+
 export function fmtDate(iso: string): string {
   const d = new Date(iso);
   return `${d.getFullYear()}.${String(d.getMonth() + 1).padStart(2, "0")}.${String(d.getDate()).padStart(2, "0")}`;

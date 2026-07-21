@@ -21,6 +21,26 @@ export type TeacherSettings = {
   cancel_free_hours: number;
   book_free_hours: number;
   swap_free_hours: number;
+  billing_day: number;
+};
+
+/** 정산 탭 한 줄 = 학생×반 */
+export type SettlementRow = {
+  class_id: string;
+  class_name: string;
+  price: number;
+  enrollment_id: string;
+  student_name: string;
+  billing_method: BillingMethod;
+  prepay_sessions: number | null;
+  window_start: string;
+  window_end: string;
+  window_count: number;
+  window_amount: number;
+  window_paid: boolean;
+  prepaid_total: number;
+  completed_total: number;
+  prepay_remaining: number;
 };
 
 /** 학생 화면에서 "지금 이 동작이 즉시 되는지 / 승인이 필요한지" 판단에 쓰는 값들 */
@@ -82,18 +102,24 @@ export type StudentOverview = {
   teacher_memo: string | null;
 };
 
+/** 학생별 결제 방식: 월 정산(그 달 온 만큼) vs 선불(N회 미리 내고 차감) */
+export type BillingMethod = "monthly" | "prepay";
+
 export type ClassRow = {
   id: string;
   name: string;
   description: string | null;
   archived: boolean;
   member_count: number;
+  price: number; // 회차당 단가(원)
 };
 
 export type ClassRosterRow = {
   enrollment_id: string;
   student_name: string;
   is_member: boolean;
+  billing_method: BillingMethod;
+  prepay_sessions: number | null;
 };
 
 export type JournalEntry = {

@@ -46,6 +46,7 @@ export async function saveSettings(form: {
   cancel_free_hours: number;
   book_free_hours: number;
   swap_free_hours: number;
+  billing_day: number;
 }) {
   const supabase = await createClient();
   const {
@@ -58,6 +59,9 @@ export async function saveSettings(form: {
     form.swap_free_hours < 0
   ) {
     return { error: "기준 시간은 0 이상이어야 해요" };
+  }
+  if (form.billing_day < 1 || form.billing_day > 28) {
+    return { error: "정산일은 1~28일 사이로 정해 주세요" };
   }
   const { error } = await supabase
     .from("teacher_settings")
@@ -72,10 +76,12 @@ export async function saveSettings(form: {
       cancel_free_hours: form.cancel_free_hours,
       book_free_hours: form.book_free_hours,
       swap_free_hours: form.swap_free_hours,
+      billing_day: form.billing_day,
     })
     .eq("teacher_id", user.id);
   revalidatePath("/t/settings");
   revalidatePath("/t/schedule");
+  revalidatePath("/t/settlement");
   revalidatePath("/s/schedule");
   return { error: error?.message ?? null };
 }
