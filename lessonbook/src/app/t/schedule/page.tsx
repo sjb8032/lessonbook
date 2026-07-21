@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import DaySchedule from "@/components/DaySchedule";
+import ShareJoinCode from "@/components/ShareJoinCode";
 import type { ScheduleRow } from "@/lib/types";
 
 function monthRange(offset: number) {
@@ -45,11 +46,8 @@ export default async function TeacherSchedulePage({
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-between rounded-xl bg-pen-soft px-4 py-2.5">
-        <span className="text-sm text-pen">수강생 가입 코드</span>
-        <span className="num text-sm font-bold tracking-widest text-pen">
-          {settings?.join_code}
-        </span>
+      <div className="mb-4">
+        <ShareJoinCode code={settings?.join_code ?? ""} />
       </div>
       <DaySchedule
         role="teacher"

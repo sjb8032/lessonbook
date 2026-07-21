@@ -1,5 +1,6 @@
 import { createClient } from "@/lib/supabase/server";
 import ClassManager from "@/components/ClassManager";
+import ShareJoinCode from "@/components/ShareJoinCode";
 import type { ClassRow } from "@/lib/types";
 
 export default async function ClassesPage() {
@@ -9,6 +10,12 @@ export default async function ClassesPage() {
   } = await supabase.auth.getUser();
 
   const { data: classes } = await supabase.rpc("get_classes");
+
+  const { data: settings } = await supabase
+    .from("teacher_settings")
+    .select("join_code")
+    .eq("teacher_id", user!.id)
+    .maybeSingle();
 
   const { data: enrollments } = await supabase
     .from("enrollments")
@@ -35,6 +42,11 @@ export default async function ClassesPage() {
           시간표에서 특정 반만 예약할 수 있는 시간을 열 수 있어요.
         </p>
       </div>
+
+      <ShareJoinCode code={settings?.join_code ?? ""} />
+      <p className="-mt-2 text-xs text-ink-soft">
+        학생이 이 코드로 가입·연결하면 아래에서 반에 넣을 수 있어요
+      </p>
       <ClassManager
         classes={(classes as ClassRow[]) ?? []}
         students={students}
