@@ -6,20 +6,24 @@ import type { TeacherRequest } from "@/lib/types";
 import { fmtDateTime } from "@/lib/utils";
 import { respondBooking, respondCancel } from "@/actions/bookings";
 import { respondSwapTeacher } from "@/actions/swaps";
+import { respondEnrollment } from "@/actions/enrollments";
 
 const HEADING: Record<TeacherRequest["kind"], string> = {
+  enrollment: "수강 연결 신청",
   booking: "예약 신청",
   cancel: "취소 요청",
   swap: "시간 교환 승인",
 };
 
 const ACCEPT_LABEL: Record<TeacherRequest["kind"], string> = {
+  enrollment: "연결 승인",
   booking: "예약 승인",
   cancel: "취소 승인",
   swap: "교환 승인",
 };
 
 const REJECT_LABEL: Record<TeacherRequest["kind"], string> = {
+  enrollment: "거절",
   booking: "반려",
   cancel: "반려 (수업 유지)",
   swap: "반려 (시간 유지)",
@@ -40,7 +44,9 @@ export default function RequestInbox({
     setBusy(req.kind + req.ref_id);
     startTransition(async () => {
       const res =
-        req.kind === "booking"
+        req.kind === "enrollment"
+          ? await respondEnrollment(req.ref_id, accept)
+          : req.kind === "booking"
           ? await respondBooking(req.ref_id, accept)
           : req.kind === "cancel"
           ? await respondCancel(req.ref_id, accept)
@@ -73,15 +79,23 @@ export default function RequestInbox({
               <span className="text-sm font-medium">{req.who}</span>
             </div>
 
-            <p className="num mt-2 text-sm">
-              {fmtDateTime(req.starts_at)}
-              {req.other_time && (
-                <> ↔ {fmtDateTime(req.other_time)}</>
-              )}
-            </p>
-
-            {req.message && (
-              <p className="mt-2 text-sm text-ink-soft">&ldquo;{req.message}&rdquo;</p>
+            {req.kind === "enrollment" ? (
+              <p className="mt-2 text-sm text-ink-soft">
+                새 수강생 연결 요청
+                {req.message && <span className="num"> · {req.message}</span>}
+              </p>
+            ) : (
+              <>
+                <p className="num mt-2 text-sm">
+                  {fmtDateTime(req.starts_at)}
+                  {req.other_time && <> ↔ {fmtDateTime(req.other_time)}</>}
+                </p>
+                {req.message && (
+                  <p className="mt-2 text-sm text-ink-soft">
+                    &ldquo;{req.message}&rdquo;
+                  </p>
+                )}
+              </>
             )}
 
             <div className="mt-3 flex gap-2">

@@ -82,7 +82,7 @@ export type ScheduleRow = {
 };
 
 export type TeacherRequest = {
-  kind: "booking" | "cancel" | "swap";
+  kind: "enrollment" | "booking" | "cancel" | "swap";
   ref_id: string;
   starts_at: string;
   other_time: string | null;

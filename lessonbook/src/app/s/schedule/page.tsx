@@ -25,24 +25,58 @@ export default async function StudentSchedulePage({
     data: { user },
   } = await supabase.auth.getUser();
 
-  const { data: enrollment } = await supabase
+  const { data: enrollments } = await supabase
     .from("enrollments")
-    .select("id, teacher_id, teacher:profiles!enrollments_teacher_id_fkey(name)")
+    .select(
+      "id, teacher_id, status, teacher:profiles!enrollments_teacher_id_fkey(name)"
+    )
     .eq("student_id", user!.id)
-    .eq("status", "active")
-    .limit(1)
-    .maybeSingle();
+    .in("status", ["active", "pending", "rejected"]);
 
-  if (!enrollment) {
+  const enrollment =
+    enrollments?.find((e) => e.status === "active") ??
+    enrollments?.find((e) => e.status === "pending") ??
+    enrollments?.[0] ??
+    null;
+
+  if (!enrollment || enrollment.status !== "active") {
+    const t = enrollment?.teacher as unknown as { name: string } | null;
     return (
       <div className="rounded-xl border border-line bg-card p-6 text-center">
-        <p className="font-semibold">아직 연결된 선생님이 없어요</p>
-        <p className="mt-1 text-sm text-ink-soft">
-          선생님께 가입 코드를 받아 연결해 주세요
-        </p>
-        <Link href="/onboarding" className="mt-4 inline-block text-sm text-pen">
-          가입 코드 입력하기 →
-        </Link>
+        {enrollment?.status === "pending" ? (
+          <>
+            <p className="font-semibold">선생님 승인을 기다리는 중이에요</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              {t?.name} 선생님이 승인하면 시간표가 열려요
+            </p>
+          </>
+        ) : enrollment?.status === "rejected" ? (
+          <>
+            <p className="font-semibold">연결 신청이 거절됐어요</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              코드를 다시 확인하거나 선생님께 문의해 주세요
+            </p>
+            <Link
+              href="/onboarding"
+              className="mt-4 inline-block text-sm text-pen"
+            >
+              가입 코드 다시 입력하기 →
+            </Link>
+          </>
+        ) : (
+          <>
+            <p className="font-semibold">아직 연결된 선생님이 없어요</p>
+            <p className="mt-1 text-sm text-ink-soft">
+              선생님께 가입 코드를 받아 연결해 주세요
+            </p>
+            <Link
+              href="/onboarding"
+              className="mt-4 inline-block text-sm text-pen"
+            >
+              가입 코드 입력하기 →
+            </Link>
+          </>
+        )}
       </div>
     );
   }

@@ -29,9 +29,13 @@ export async function setupStudent(name: string, phone: string, code: string) {
   } = await supabase.auth.getUser();
   if (!user) return { error: "로그인이 필요해요" };
 
+  // 거절 후 다시 신청하는 경우도 있어서 프로필은 upsert
   const { error: pErr } = await supabase
     .from("profiles")
-    .insert({ id: user.id, role: "student", name, phone: phone || null });
+    .upsert(
+      { id: user.id, role: "student", name, phone: phone || null },
+      { onConflict: "id" }
+    );
   if (pErr) return { error: pErr.message };
 
   const { error: jErr } = await supabase.rpc("join_teacher", { p_code: code });
