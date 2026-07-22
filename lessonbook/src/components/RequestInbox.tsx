@@ -141,8 +141,11 @@ export default function RequestInbox({
                 <p className="num mt-2 text-sm">
                   {fmtDateTime(req.starts_at)}
                   {req.other_time && <> ↔ {fmtDateTime(req.other_time)}</>}
+                  {req.kind === "booking" && req.message && (
+                    <span className="text-ink-soft"> · {req.message}</span>
+                  )}
                 </p>
-                {req.message && (
+                {req.kind !== "booking" && req.message && (
                   <p className="mt-2 text-sm text-ink-soft">
                     &ldquo;{req.message}&rdquo;
                   </p>

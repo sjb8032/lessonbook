@@ -67,8 +67,7 @@ export default function DaySchedule({
   const [swapSource, setSwapSource] = useState<string>("");
   const [swapMessage, setSwapMessage] = useState("");
 
-  // 시간 열 때: 종류 + (수업이면) 반 제한
-  const [openKind, setOpenKind] = useState<SlotKind>("lesson");
+  // 시간 열 때: 반 전용 제한만 (종류는 학생이 예약할 때 고른다)
   const [openClassId, setOpenClassId] = useState<string>(""); // "" = 제한 없음
 
   const monthStart = useMemo(() => {
@@ -395,35 +394,14 @@ export default function DaySchedule({
             </button>
           </div>
 
-          {/* 종류 — 체험을 꺼두면 체험 옵션은 숨김 */}
-          <div className="flex gap-1 rounded-xl bg-line/40 p-1">
-            {(
-              policy.allow_trial
-                ? (["lesson", "recording", "trial"] as SlotKind[])
-                : (["lesson", "recording"] as SlotKind[])
-            ).map((k) => (
-              <button
-                key={k}
-                onClick={() => setOpenKind(k)}
-                className={`flex-1 rounded-lg py-1.5 text-sm font-medium ${
-                  openKind === k
-                    ? "bg-card text-pen shadow-sm"
-                    : "text-ink-soft"
-                }`}
-              >
-                {KIND_LABEL[k]}
-              </button>
-            ))}
-          </div>
-
-          {/* 반 제한 — 수업일 때만 */}
-          {openKind === "lesson" && classes.length > 0 && (
+          {/* 반 전용 제한 (선택) — 수업/녹음/체험은 학생이 예약할 때 고른다 */}
+          {classes.length > 0 && (
             <select
               value={openClassId}
               onChange={(e) => setOpenClassId(e.target.value)}
               className="w-full rounded-xl border border-line bg-card px-3 py-2.5 text-sm"
             >
-              <option value="">모든 반 (제한 없음)</option>
+              <option value="">누구나 (수업·녹음·체험)</option>
               {classes.map((c) => (
                 <option key={c.id} value={c.id}>
                   {c.name} 전용
@@ -443,8 +421,7 @@ export default function DaySchedule({
                     return start.toISOString();
                   }),
                   lessonMinutes,
-                  openKind,
-                  openKind === "lesson" ? openClassId || null : null
+                  openClassId || null
                 );
                 if (!res.error) setSelected(new Set());
                 return res;
@@ -452,7 +429,7 @@ export default function DaySchedule({
             }
             className="w-full rounded-lg bg-pen py-2.5 text-sm font-semibold text-white disabled:opacity-50"
           >
-            {KIND_LABEL[openKind]} 시간으로 열기
+            시간 열기
           </button>
         </div>
       )}
@@ -597,11 +574,20 @@ function SlotSheet({
     policy.cancel_free_hours
   );
 
-  // 학생이 제한 없는 수업을 예약할 때: 여러 반 소속이면 어느 반인지 골라야 한다
+  // 학생 예약: 반 전용 시간이면 그 반 수업으로 고정,
+  // 아니면 이 시간을 무엇으로 쓸지(수업/녹음/체험)를 학생이 고른다
+  const slotRestricted = row.slot_status === "open" && !!row.class_id;
+  const kindChoices = [
+    ...(classes.length > 0 ? (["lesson"] as SlotKind[]) : []),
+    "recording" as SlotKind,
+    ...(policy.allow_trial ? (["trial"] as SlotKind[]) : []),
+  ];
+  const [bookKind, setBookKind] = useState<SlotKind>(kindChoices[0]);
+  const effKind: SlotKind = slotRestricted ? "lesson" : bookKind;
   const needClassPick =
     role === "student" &&
-    row.kind === "lesson" &&
-    !row.class_id &&
+    effKind === "lesson" &&
+    !slotRestricted &&
     classes.length > 1;
   const [bookClass, setBookClass] = useState("");
 
@@ -612,7 +598,7 @@ function SlotSheet({
       <p className="font-semibold">{time}</p>
       {tag && (
         <span className="mt-1 inline-block rounded-full bg-line/50 px-2 py-0.5 text-xs text-ink-soft">
-          {row.kind === "lesson" ? `${tag} 전용` : tag}
+          {slotRestricted ? `${tag} 전용` : tag}
         </span>
       )}
 
@@ -696,7 +682,9 @@ function SlotSheet({
                 onClick={() => run(() => completeLesson(row.booking_id!))}
                 className="w-full rounded-xl bg-pen py-3 font-semibold text-white disabled:opacity-50"
               >
-                수업 완료 처리 (회차 +1)
+                {row.kind === "lesson"
+                  ? "수업 완료 처리 (회차 +1)"
+                  : `${KIND_LABEL[row.kind]} 완료 처리`}
               </button>
               <button
                 disabled={pending}
@@ -724,12 +712,33 @@ function SlotSheet({
       {role === "student" && row.slot_status === "open" && (
         <>
           <p className="mt-1 text-sm text-ink-soft">
-            {bookNeedsApproval
-              ? `${KIND_LABEL[row.kind]}이 ${policy.book_free_hours}시간 안쪽이라 선생님 승인을 받아야 확정돼요`
-              : `예약 가능한 ${KIND_LABEL[row.kind]} 시간이에요`}
+            {slotRestricted
+              ? `${row.class_name ?? "반"} 수업 전용 시간이에요`
+              : "이 시간을 무엇으로 쓸까요?"}
+            {bookNeedsApproval &&
+              ` · ${policy.book_free_hours}시간 안쪽이라 선생님 승인을 받아야 확정돼요`}
           </p>
-          {row.kind === "trial" && (
-            <p className="mt-1 text-xs text-ink-soft">
+
+          {!slotRestricted && (
+            <div className="mt-3 flex gap-1 rounded-xl bg-line/40 p-1">
+              {kindChoices.map((k) => (
+                <button
+                  key={k}
+                  onClick={() => setBookKind(k)}
+                  className={`flex-1 rounded-lg py-2 text-sm font-medium ${
+                    bookKind === k
+                      ? "bg-card text-pen shadow-sm"
+                      : "text-ink-soft"
+                  }`}
+                >
+                  {KIND_LABEL[k]}
+                </button>
+              ))}
+            </div>
+          )}
+
+          {effKind === "trial" && (
+            <p className="mt-2 text-xs text-ink-soft">
               체험비{" "}
               <b className="num">
                 {policy.trial_price > 0
@@ -764,14 +773,18 @@ function SlotSheet({
             disabled={pending || !isFuture || (needClassPick && !bookClass)}
             onClick={() =>
               run(() =>
-                bookSlot(row.slot_id, needClassPick ? bookClass : undefined)
+                bookSlot(
+                  row.slot_id,
+                  needClassPick ? bookClass : undefined,
+                  effKind
+                )
               )
             }
             className="mt-4 w-full rounded-xl bg-pen py-3 font-semibold text-white disabled:opacity-50"
           >
             {bookNeedsApproval
-              ? `${KIND_LABEL[row.kind]} 신청하기`
-              : `이 ${KIND_LABEL[row.kind]} 예약하기`}
+              ? `${KIND_LABEL[effKind]} 신청하기`
+              : `이 ${KIND_LABEL[effKind]} 예약하기`}
           </button>
         </>
       )}

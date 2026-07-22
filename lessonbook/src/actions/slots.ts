@@ -3,12 +3,10 @@
 import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 
-type SlotKind = "lesson" | "recording" | "trial";
-
+/** 시간 열기 — 종류 구분 없이 "되는 시간"만 연다. classId 는 반 전용 제한(선택) */
 export async function openSlots(
   startsAtISOs: string[],
   minutes: number,
-  kind: SlotKind = "lesson",
   classId: string | null = null
 ) {
   const supabase = await createClient();
@@ -25,9 +23,7 @@ export async function openSlots(
       ends_at: new Date(
         new Date(iso).getTime() + minutes * 60 * 1000
       ).toISOString(),
-      kind,
-      // 반 제한은 수업 슬롯에서만 의미가 있다
-      class_id: kind === "lesson" ? classId : null,
+      class_id: classId,
     }))
   );
   revalidatePath("/t/schedule");
