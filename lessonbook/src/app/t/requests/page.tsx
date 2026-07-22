@@ -1,10 +1,12 @@
 import { createClient } from "@/lib/supabase/server";
 import RequestInbox from "@/components/RequestInbox";
-import type { TeacherRequest } from "@/lib/types";
+import type { ClassRow, TeacherRequest } from "@/lib/types";
 
 export default async function RequestsPage() {
   const supabase = await createClient();
   const { data, error } = await supabase.rpc("get_teacher_requests");
+  const { data: classData } = await supabase.rpc("get_classes");
+  const classes = ((classData as ClassRow[]) ?? []).filter((c) => !c.archived);
 
   return (
     <div className="space-y-4">
@@ -18,7 +20,10 @@ export default async function RequestsPage() {
       {error ? (
         <p className="text-sm text-redpen">{error.message}</p>
       ) : (
-        <RequestInbox requests={(data as TeacherRequest[]) ?? []} />
+        <RequestInbox
+          requests={(data as TeacherRequest[]) ?? []}
+          classes={classes}
+        />
       )}
     </div>
   );

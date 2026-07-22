@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import type { TeacherRequest } from "@/lib/types";
-import { fmtDateTime } from "@/lib/utils";
+import type { ClassRow, TeacherRequest } from "@/lib/types";
+import { fmtDateTime, fmtRate } from "@/lib/utils";
 import { respondBooking, respondCancel } from "@/actions/bookings";
 import { respondSwapTeacher } from "@/actions/swaps";
 import { respondEnrollment } from "@/actions/enrollments";
@@ -31,13 +31,28 @@ const REJECT_LABEL: Record<TeacherRequest["kind"], string> = {
 
 export default function RequestInbox({
   requests,
+  classes = [],
 }: {
   requests: TeacherRequest[];
+  classes?: ClassRow[];
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
+  // 수강 신청별로 승인 시 배정할 반 (여러 반 선택 가능)
+  const [picked, setPicked] = useState<Map<string, Set<string>>>(new Map());
+
+  function togglePick(enrollmentId: string, classId: string) {
+    setPicked((prev) => {
+      const next = new Map(prev);
+      const set = new Set(next.get(enrollmentId));
+      if (set.has(classId)) set.delete(classId);
+      else set.add(classId);
+      next.set(enrollmentId, set);
+      return next;
+    });
+  }
 
   function respond(req: TeacherRequest, accept: boolean) {
     setError(null);
@@ -45,7 +60,11 @@ export default function RequestInbox({
     startTransition(async () => {
       const res =
         req.kind === "enrollment"
-          ? await respondEnrollment(req.ref_id, accept)
+          ? await respondEnrollment(
+              req.ref_id,
+              accept,
+              accept ? [...(picked.get(req.ref_id) ?? [])] : []
+            )
           : req.kind === "booking"
           ? await respondBooking(req.ref_id, accept)
           : req.kind === "cancel"
@@ -80,10 +99,43 @@ export default function RequestInbox({
             </div>
 
             {req.kind === "enrollment" ? (
-              <p className="mt-2 text-sm text-ink-soft">
-                새 수강생 연결 요청
-                {req.message && <span className="num"> · {req.message}</span>}
-              </p>
+              <>
+                <p className="mt-2 text-sm text-ink-soft">
+                  새 수강생 연결 요청
+                  {req.message && <span className="num"> · {req.message}</span>}
+                </p>
+                {classes.length > 0 ? (
+                  <div className="mt-3 space-y-1.5 rounded-xl bg-line/20 p-2">
+                    <p className="px-1 text-xs font-medium text-ink-soft">
+                      승인하면서 넣을 반 (여러 개 가능, 나중에 바꿀 수 있어요)
+                    </p>
+                    {classes.map((c) => (
+                      <label
+                        key={c.id}
+                        className="flex cursor-pointer items-center gap-2.5 rounded-lg px-1 py-1"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={picked.get(req.ref_id)?.has(c.id) ?? false}
+                          onChange={() => togglePick(req.ref_id, c.id)}
+                          className="h-5 w-5 accent-[var(--color-pen)]"
+                        />
+                        <span className="text-sm">{c.name}</span>
+                        <span className="num ml-auto text-xs text-ink-soft">
+                          {fmtRate(c.price)} ·{" "}
+                          {c.default_billing_method === "prepay"
+                            ? `${c.default_prepay_sessions}회 선불`
+                            : "달마다"}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="mt-2 text-xs text-ink-soft">
+                    아직 만든 반이 없어요. 승인 후 반 관리에서 배정할 수 있어요.
+                  </p>
+                )}
+              </>
             ) : (
               <>
                 <p className="num mt-2 text-sm">
